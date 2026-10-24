@@ -98,6 +98,14 @@ class ForcedCommandTest(unittest.TestCase):
         return m.group(1).replace("\\$", "$")
 
     def test_a_client_command_becomes_check_and_nothing_else(self):
+        # sshd runs it with the login shell, which install.sh allows to be sh, dash or bash.
+        shells = [s for s in ("bash", "sh", "dash") if shutil.which(s)]
+        self.assertIn("bash", shells)
+        for shell in shells:
+            with self.subTest(shell=shell):
+                self.check_with(shell)
+
+    def check_with(self, shell):
         with tempfile.TemporaryDirectory() as d:
             fake = Path(d) / "sudo"
             fake.write_text('#!/bin/sh\nfor a in "$@"; do printf "[%s]" "$a"; done\n', encoding="utf-8")
@@ -113,9 +121,12 @@ class ForcedCommandTest(unittest.TestCase):
                 env = {"PATH": f"{d}:/usr/bin:/bin"}
                 if client is not None:
                     env["SSH_ORIGINAL_COMMAND"] = client
-                done = subprocess.run(["bash", "-c", self.forced()], capture_output=True, text=True, env=env, cwd=d)
+                done = subprocess.run([shell, "-c", self.forced()], capture_output=True, text=True, env=env, cwd=d)
                 self.assertEqual(done.stdout, args, repr(client))
                 self.assertFalse(os.path.exists(os.path.join(d, "pwned")), repr(client))
+
+    def test_install_refuses_a_login_shell_the_forced_command_does_not_run_in(self):
+        self.assertIn("sh|dash|bash) ;;", INSTALL)
 
     def test_the_key_stays_restricted(self):
         self.assertIn(',restrict $KEY wakeci"', INSTALL)

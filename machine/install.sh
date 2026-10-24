@@ -31,6 +31,12 @@ id "$USER_NAME" >/dev/null 2>&1 || die "--user must be an existing account"
 id "$CI_USER" >/dev/null 2>&1 || die "--ci-user must be an existing account (the one that runs CI jobs)"
 # Compared by UID: one user can have several names.
 [ "$(id -u "$USER_NAME")" != "$(id -u "$CI_USER")" ] || die "--user cannot be $CI_USER: that account runs CI code"
+# sshd runs the forced command (step 3) with this account's login shell.
+USER_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
+case "$(basename "$USER_SHELL")" in
+  sh|dash|bash) ;;
+  *) die "--user $USER_NAME has the login shell $USER_SHELL: give it /bin/sh or /bin/bash (usermod -s /bin/sh $USER_NAME)" ;;
+esac
 [ -f "$PUBKEY" ] || die "--pubkey file not found"
 [ "$(grep -c . "$PUBKEY")" -eq 1 ] || die "--pubkey file must hold exactly one key"
 grep -qE '^ssh-(ed25519|rsa) ' "$PUBKEY" || die "--pubkey is not an SSH public key"
