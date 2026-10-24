@@ -14,9 +14,9 @@ def magic_packet(mac: str) -> bytes:
     return b"\xff" * 6 + bytes.fromhex(hexes) * 16
 
 
-def wake(machine: Machine, broadcast: str = "255.255.255.255", port: int = 9) -> None:
+def wake(machine: Machine, broadcast: str = "255.255.255.255", port: int = 9, sock: Callable = socket.socket) -> None:
     packet = magic_packet(machine.mac)
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+    with sock(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.sendto(packet, (broadcast, port))
 
@@ -53,6 +53,13 @@ def ssh_sleep_command(machine: Machine, key_path: str, known_hosts: str) -> list
         f"UserKnownHostsFile={known_hosts}",
         f"{machine.ssh_user}@{machine.host}",
     ]
+
+
+def ssh_check_command(machine: Machine, key_path: str, known_hosts: str) -> list[str]:
+    """Asks ``wakeci-sleep check`` (wakeci doctor --probe). Whatever the client sends, the
+    machine's forced command only adds the word "check"; a machine set up before 0.5.0
+    ignores it and suspends."""
+    return [*ssh_sleep_command(machine, key_path, known_hosts), "check"]
 
 
 def put_to_sleep(machine: Machine, key_path: str, known_hosts: str, run: Callable = subprocess.run) -> str:

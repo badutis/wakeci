@@ -12,6 +12,13 @@ change raises the minor number.
   already there. Machines it cannot know the MAC or address of get `FILL-IN`; prefixes
   that look like one machine are suggested for joining, never joined. A new prefix that
   would also match another machine's prefix is not added, so no runner belongs to two machines.
+- `wakeci doctor`: checks the configuration, files and modes, the clock against GitHub's,
+  every token (valid, expiry, write scopes, permissions), the runners against the machines,
+  the SSH key and host keys, the Wake-on-LAN address and the webhook, each linked to
+  `docs/troubleshooting.md`. It changes nothing by default; `--wake NAME`, `--notify-test`
+  and `--probe` (asks `wakeci-sleep check`) do more. On the controller host:
+  `sudo -u wakeci python3 /opt/wakeci/controller/doctor.py /etc/wakeci/config.json`.
+  `controller/install.sh` runs `doctor --offline` at the end.
 
 ### Changed
 - `wakeci-sleep check` changes nothing and prints what a suspend would do (exit code 10);
