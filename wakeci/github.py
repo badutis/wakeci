@@ -109,6 +109,10 @@ class GitHub:
                 return out
             page += 1
 
+    def runners(self, src: Source) -> list[dict]:
+        """Every runner registered at the source, as GitHub returns it."""
+        return self._pages(f"{src.runners_path}/actions/runners", "runners", src)
+
     # --- observation -------------------------------------------------------------------
 
     def backoff_until(self) -> Optional[datetime]:
@@ -135,7 +139,7 @@ class GitHub:
                         labels=frozenset(lab["name"] for lab in r.get("labels", [])),
                         source=src.runners_path,
                     )
-                    for r in self._pages(f"{src.runners_path}/actions/runners", "runners", src)
+                    for r in self.runners(src)
                 ]
                 got_jobs: list[QueuedJob] = []
                 for repo in src.repos:

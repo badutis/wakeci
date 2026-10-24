@@ -2,6 +2,7 @@
 
     wakeci run CONFIG       run the controller (what the systemd unit starts)
     wakeci check CONFIG     check a configuration; exit 0 when it is valid
+    wakeci discover ...     build or extend a configuration from the runners GitHub knows
     wakeci version          print the version
 
 ``python3 -m wakeci CONFIG``, the form used before the subcommands existed, still runs the
@@ -16,7 +17,7 @@ from typing import Optional
 
 from . import __version__, config_check
 
-COMMANDS = ("run", "check", "version")
+COMMANDS = ("run", "check", "discover", "version")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -32,6 +33,25 @@ def _parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="check a configuration")
     check.add_argument("config", help="path to config.json")
     check.add_argument("--paths", action="store_true", help="print the paths the installer prepares")
+    disc = sub.add_parser(
+        "discover",
+        help="build or extend a configuration from the runners GitHub knows",
+        description="Groups the runners GitHub knows into machines and writes FILL-IN where only you know "
+        "the answer (MAC, host). With --update, nothing in the file is changed or removed. GET requests only; "
+        "the token is never printed.",
+    )
+    disc.add_argument("--update", metavar="CONFIG", help="add machines to this configuration")
+    disc.add_argument("--write", action="store_true", help="with --update: replace the file (old one: CONFIG.bak)")
+    disc.add_argument("--source", action="append", metavar="PATH", help="repos/<owner>/<repo> or orgs/<org>")
+    disc.add_argument(
+        "--repos", action="append", metavar="LIST", help="<owner>/<repo>,... whose jobs the source's runners take"
+    )
+    disc.add_argument("--token-file", action="append", metavar="FILE", help="read-only token of the source before it")
+    disc.add_argument("--token", action="append", metavar="SOURCE=FILE", help="with --update: token file of a source")
+    disc.add_argument(
+        "--machine", action="append", metavar="NAME=PREFIX,...", help="put these prefixes on one new machine"
+    )
+    disc.add_argument("--json", action="store_true", help="print the configuration and the report as JSON")
     sub.add_parser("version", help="print the version")
     return ap
 
@@ -67,6 +87,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     if ns.command == "check":
         return _check(ns.config, ns.paths)
+    if ns.command == "discover":
+        from . import discover
+
+        return discover.run(ns)
     from . import main as controller
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

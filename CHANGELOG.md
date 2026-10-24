@@ -6,6 +6,12 @@ change raises the minor number.
 
 ## [Unreleased]
 
+### Added
+- `wakeci discover`: builds a configuration from the runners GitHub knows, or adds machines
+  for new runners to an existing one (`--update`, `--write`) without changing anything
+  already there. Machines it cannot know the MAC or address of get `FILL-IN`; prefixes
+  that look like one machine are suggested for joining, never joined.
+
 ### Changed
 - `wakeci check` refuses a value that still holds `FILL-IN`, two machines with the same MAC
   or host, and the same runner prefix on two machines. A prefix that starts another
