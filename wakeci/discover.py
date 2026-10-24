@@ -364,6 +364,9 @@ def _write(path: str, text: str) -> str:
         # Keeps the group the service reads it through, e.g. root:wakeci 0640.
         with contextlib.suppress(PermissionError):
             os.chown(tmp, st.st_uid, st.st_gid)
+        # A read-only backup from an earlier run could not be opened for writing.
+        if os.path.lexists(path + ".bak"):
+            os.unlink(path + ".bak")
         shutil.copy2(path, path + ".bak")
         os.replace(tmp, path)
         return path
@@ -417,7 +420,11 @@ def run(ns) -> int:
     _print_report(report, changed, err)
 
     if ns.write and changed:
-        written = _write(ns.update, out_text)
+        try:
+            written = _write(ns.update, out_text)
+        except OSError as e:
+            print(f"wakeci discover: cannot write {ns.update}: {e.strerror or e}", file=err)
+            return 1
         print(f"wrote {written} (the old one is {written}.bak)", file=err)
     if ns.json:
         print(json.dumps({"config": new, "report": dataclasses.asdict(report)}, indent=2, ensure_ascii=False))
