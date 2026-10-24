@@ -13,6 +13,11 @@ change raises the minor number.
   that look like one machine are suggested for joining, never joined.
 
 ### Changed
+- `wakeci-sleep check` changes nothing and prints what a suspend would do (exit code 10);
+  `wakeci-sleep` with any other argument refuses (exit code 2). Over SSH, any command the
+  client sends becomes `check`, and `sudoers` allows the script only with no argument or
+  with `check`. **Run `machine/install.sh` again on every machine**: an older one ignores
+  the client's command and suspends.
 - `wakeci check` refuses a value that still holds `FILL-IN`, two machines with the same MAC
   or host, and the same runner prefix on two machines. A prefix that starts another
   machine's prefix (`host1` and `host10-`) is a warning: such a runner belongs to both.

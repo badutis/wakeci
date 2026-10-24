@@ -117,11 +117,15 @@ sudo bash machine/install.sh --user wakeci --ci-user runner --pubkey /tmp/wakeci
 ```
 
 - `--user` is the account the controller logs in as. It gets the controller's public key,
-  restricted to the single command `sudo -n /usr/local/sbin/wakeci-sleep`.
+  restricted to the single command `sudo -n /usr/local/sbin/wakeci-sleep`. Any command the
+  client sends is not run: it only turns the suspend into `wakeci-sleep check`, which
+  changes nothing and reports what would happen (`wakeci doctor` uses it).
 - `--ci-user` is the account that runs CI jobs. The script refuses to give it the key.
 - `--iface` (default `eno1`) is the interface Wake-on-LAN is enabled on.
 
-Running the script again changes nothing.
+Running the script again changes nothing. **After upgrading WakeCI, run it again on every
+machine**: an older machine ignores the client's command and would suspend when asked for
+a check.
 
 **On the controller host.** Start from a minimal system: on an ARM board, its minimal
 Debian-based image (Armbian *minimal*, Raspberry Pi OS *Lite*), with no desktop and no

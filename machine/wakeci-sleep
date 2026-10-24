@@ -2,18 +2,52 @@
 # Suspends this machine unless a job is running on it. Only the controller runs it, over an
 # SSH key that authorized_keys restricts to this one command; sudoers allows it without a
 # password. Exit codes: wakeci/actions.py SLEEP_EXIT.
+#
+#   wakeci-sleep          suspend (or reboot, when an update asked for one), or refuse
+#   wakeci-sleep check    change nothing; print what it would do (wakeci doctor uses it)
+#
+# Over SSH the client cannot choose the command: any command it sends becomes "check"
+# (machine/install.sh), so a client can only ask instead of suspending.
 set -euo pipefail
+
+PROTOCOL=1  # raised when the check output or the exit codes change
+REBOOT_FLAG=/var/run/reboot-required
+
+if [ $# -eq 0 ]; then
+  MODE="sleep"
+elif [ $# -eq 1 ] && [ "$1" = check ]; then
+  MODE="check"
+else
+  echo "usage: wakeci-sleep [check]" >&2
+  exit 2
+fi
 
 # This check decides, not the GitHub API: the API reports a busy runner late.
 if pgrep -f 'Runner.Worker' >/dev/null; then
-  echo "busy: Runner.Worker is running" >&2
-  exit 3
+  STATE=busy
+elif [ -f "$REBOOT_FLAG" ]; then
+  STATE=would-reboot
+else
+  STATE=would-suspend
 fi
 
-# Scheduled 5 s ahead, so the SSH session can end cleanly.
-if [ -f /var/run/reboot-required ]; then
-  systemd-run --quiet --on-active=5 /usr/bin/systemctl reboot
-  exit 4
+if [ "$MODE" = check ]; then
+  echo "wakeci-sleep protocol=$PROTOCOL state=$STATE"
+  exit 10
 fi
-systemd-run --quiet --on-active=5 /usr/bin/systemctl suspend
-exit 0
+
+case "$STATE" in
+  busy)
+    echo "busy: Runner.Worker is running" >&2
+    exit 3
+    ;;
+  would-reboot)
+    # Scheduled 5 s ahead, so the SSH session can end cleanly.
+    systemd-run --quiet --on-active=5 /usr/bin/systemctl reboot
+    exit 4
+    ;;
+  *)
+    systemd-run --quiet --on-active=5 /usr/bin/systemctl suspend
+    exit 0
+    ;;
+esac

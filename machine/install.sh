@@ -40,14 +40,20 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # 1. The suspend command.
 install -o root -g root -m 0755 "$HERE/wakeci-sleep" /usr/local/sbin/wakeci-sleep
 
-# 2. sudo without a password, for this command only. Checked before it is put in place.
+# 2. sudo without a password, for this command only, with no argument or with "check".
+# Checked before it is put in place.
 SUDOERS_TMP="$(mktemp)"
-echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep" > "$SUDOERS_TMP"
+{
+  echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep \"\""
+  echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep check"
+} > "$SUDOERS_TMP"
 visudo -cf "$SUDOERS_TMP" >/dev/null || die "invalid sudoers line"
 install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/wakeci-sleep
 rm -f "$SUDOERS_TMP"
 
-# 3. The controller's key, restricted to one command.
+# 3. The controller's key, restricted to one command. A command the client sends (sshd
+# puts it in SSH_ORIGINAL_COMMAND) never runs: any non-empty one only adds the literal
+# word "check", so the client can ask what would happen instead of suspending.
 HOME_DIR="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 0700 "$HOME_DIR/.ssh"
 AUTH="$HOME_DIR/.ssh/authorized_keys"
@@ -55,7 +61,7 @@ touch "$AUTH"
 chown "$USER_NAME:$USER_NAME" "$AUTH"
 chmod 0600 "$AUTH"
 KEY="$(awk '{print $1" "$2}' "$PUBKEY")"
-WANT="command=\"sudo -n /usr/local/sbin/wakeci-sleep\",restrict $KEY wakeci"
+WANT="command=\"sudo -n /usr/local/sbin/wakeci-sleep \${SSH_ORIGINAL_COMMAND:+check}\",restrict $KEY wakeci"
 # Any other line with the same key (say, added by hand while testing, without the
 # restriction) is removed: this key must never give a full shell.
 FILTERED="$(mktemp)"
