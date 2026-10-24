@@ -6,6 +6,16 @@ change raises the minor number.
 
 ## [Unreleased]
 
+### Added
+- A documentation site, [badutis.github.io/wakeci](https://badutis.github.io/wakeci/), with
+  a step-by-step getting-started path. It is built from `docs/` with Zensical, strictly on
+  every pull request, and published from each release tag. The configuration reference is
+  generated from `docs/config.schema.json`, which now describes every key.
+
+### Changed
+- The README is short: what WakeCI is, a quick start and links; the details moved to the
+  site (`docs/`).
+
 ## [0.5.0] - 2026-10-25
 
 Getting started: a configuration generated from GitHub, and a check of everything before

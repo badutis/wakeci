@@ -1,0 +1,58 @@
+# Publishes the documentation site to GitHub Pages from a release tag, so the site describes
+# the version people install. Run it by hand on a tag (not a branch) to publish that tag's
+# site again. Pull requests only build it (ci.yml, job docs).
+#
+# Repository settings it needs (once): Settings > Pages > Source: GitHub Actions; and
+# Settings > Environments > github-pages > Deployment branches and tags: add the tag rule
+# "v*" (by default only the default branch may deploy, which refuses a tag).
+name: Pages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # A run by hand from a branch would otherwise end green with nothing published.
+      - name: Only from a release tag
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "::error::run this workflow on a release tag (v*), not on ${GITHUB_REF}"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --require-hashes --no-deps -r requirements-docs.txt
+      - run: zensical build --strict
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Only this job can publish; the build above has no write token.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        id: deployment

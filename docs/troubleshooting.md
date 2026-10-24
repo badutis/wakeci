@@ -23,7 +23,7 @@ The exit code is 1 when a check failed.
 ## config
 
 The configuration does not pass `wakeci check`. The message says which rule; the
-[configuration reference](../README.md#configuration) lists every key. A value that still
+[configuration reference](configuration.md) lists every key. A value that still
 holds `FILL-IN` comes from `wakeci discover`: fill in the machine's MAC and address.
 Warnings here (for example overlapping runner prefixes) do not stop the controller but are
 usually a mistake.
@@ -97,7 +97,7 @@ with a wrong time until they sync: enable time sync (`timedatectl set-ntp true`)
 
 GitHub refuses the source's token (`401`: not valid or expired), answers with another
 error, or cannot be reached (DNS, no route, proxy). Create a new token
-([Tokens](../README.md#tokens)) and store it with
+([Tokens](configuration.md#tokens)) and store it with
 `sudo bash /opt/wakeci/controller/install.sh --set-token NAME`.
 
 ## token-expiry
@@ -111,7 +111,7 @@ A classic personal access token with a scope other than `read:*` and `user:email
 (for example `repo`, `admin:org`, `workflow`, `user`, `write:packages`): every other scope
 can change something. WakeCI only reads; a stolen classic token with such a scope can
 change your repositories or account. Use a fine-grained token with read access only
-([Tokens](../README.md#tokens)).
+([Tokens](configuration.md#tokens)).
 
 ## token-perms
 

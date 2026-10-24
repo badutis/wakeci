@@ -53,7 +53,7 @@ select = ["E", "W", "F", "B", "I", "UP", "SIM"]
 
 [tool.mypy]
 python_version = "3.10"  # the oldest mypy 2 can target; 3.9 itself is covered by the test matrix
-files = ["wakeci", "controller/check_config.py", "scripts/public_safe.py", "scripts/release.py", "scripts/dco.py"]
+files = ["wakeci", "controller/check_config.py", "controller/doctor.py", "scripts/public_safe.py", "scripts/release.py", "scripts/dco.py", "scripts/config_reference.py"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true

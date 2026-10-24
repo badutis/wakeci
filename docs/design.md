@@ -1,4 +1,4 @@
-# Design
+# How it works
 
 The goal: runner machines are on only while there is work for them. Queued jobs wake
 the machines they need. A machine whose runners have done nothing for `idle_minutes` is

@@ -1,0 +1,70 @@
+# The documentation site (https://badutis.github.io/wakeci/), built by Zensical:
+#   zensical build --strict   (CI, on every pull request)
+#   zensical serve            (http://localhost:8000)
+# The tools are pinned by hash in requirements-docs.txt.
+
+[project]
+site_name = "WakeCI"
+site_description = "Self-hosted GitHub Actions runners that sleep when there is no work."
+site_url = "https://badutis.github.io/wakeci/"
+repo_url = "https://github.com/badutis/wakeci"
+repo_name = "badutis/wakeci"
+edit_uri = "edit/main/docs/"
+copyright = "WakeCI is open source under the MIT license."
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Install" = "install.md" },
+  { "Configuration" = "configuration.md" },
+  { "Generating a configuration" = "discover.md" },
+  { "Commands" = "commands.md" },
+  { "Troubleshooting" = "troubleshooting.md" },
+  { "Monitoring" = "monitoring.md" },
+  { "How it works" = "design.md" },
+  { "Development" = "development.md" },
+  { "Changelog" = "https://github.com/badutis/wakeci/blob/main/CHANGELOG.md" },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.copy",
+  "content.action.edit",
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
