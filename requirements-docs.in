@@ -1,0 +1,7 @@
+# Builds the documentation site (docs.yml). Not needed to run or develop WakeCI.
+# Every version is at least two weeks old when pinned; compile with:
+#   pip-compile --allow-unsafe --generate-hashes --output-file=requirements-docs.txt --strip-extras requirements-docs.in
+zensical==0.0.69
+# Pinned below the latest: newer releases are less than two weeks old.
+markdown==3.11
+pymdown-extensions==12.2

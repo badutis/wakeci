@@ -63,7 +63,7 @@ Add a line under `## [Unreleased]` in `CHANGELOG.md` for anything a user would n
 ## Releases
 
 Maintainers release by tagging. The steps, and how the release workflow checks and builds,
-are in the README ("Releases"):
+are in [docs/development.md](docs/development.md#releases):
 
 1. In one pull request, set `__version__` in `wakeci/__init__.py` to `X.Y.Z` and move the
    `## [Unreleased]` entries under `## [X.Y.Z] - date`.

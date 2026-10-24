@@ -14,21 +14,23 @@
     "idle_minutes": {"type": "integer", "minimum": 1, "default": 30, "description": "Idle time of all runners of a machine before it is suspended."},
     "broadcast": {"type": "string", "default": "255.255.255.255", "description": "IPv4 broadcast address for Wake-on-LAN packets."},
     "metrics_listen": {"type": "string", "pattern": "^.+:[0-9]{1,5}$", "default": "0.0.0.0:9105", "description": "<address>:<port> of the /metrics endpoint; the port is 1-65535 (checked by wakeci check)."},
-    "state_file": {"type": "string", "pattern": "^/[^\\u0000-\\u001f\\u007f]*$", "default": "/var/lib/wakeci/last-online.json"},
+    "state_file": {"type": "string", "pattern": "^/[^\\u0000-\\u001f\\u007f]*$", "default": "/var/lib/wakeci/last-online.json", "description": "When each machine was last online (the 14-day rule); written a few times a day."},
     "ssh_key": {"$ref": "#/$defs/etcFile", "description": "Private key used for wakeci-sleep."},
-    "known_hosts": {"$ref": "#/$defs/etcFile", "default": "/etc/wakeci/known_hosts"},
+    "known_hosts": {"$ref": "#/$defs/etcFile", "default": "/etc/wakeci/known_hosts", "description": "Host keys of the machines, checked strictly; the installer adds the awake ones."},
     "notify": {
+      "description": "Optional: where notifications are posted.",
       "type": "object",
       "additionalProperties": false,
       "required": ["url_file", "format"],
       "properties": {
         "url_file": {"$ref": "#/$defs/etcFile", "description": "File holding the webhook URL (a secret)."},
-        "format": {"type": "string", "enum": ["discord", "slack", "json"]},
-        "after_minutes": {"type": "number", "minimum": 0, "default": 10},
-        "repeat_hours": {"type": "number", "exclusiveMinimum": 0, "default": 6}
+        "format": {"type": "string", "enum": ["discord", "slack", "json"], "description": "discord, slack or json: the shape of the posted message."},
+        "after_minutes": {"type": "number", "minimum": 0, "default": 10, "description": "How long a problem must last before it is reported."},
+        "repeat_hours": {"type": "number", "exclusiveMinimum": 0, "default": 6, "description": "How often a message repeats while the problem lasts."}
       }
     },
     "sources": {
+      "description": "Where runners are registered, and the repositories whose jobs they take.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -36,13 +38,14 @@
         "additionalProperties": false,
         "required": ["runners_path", "repos", "token_file"],
         "properties": {
-          "runners_path": {"type": "string", "pattern": "^(repos/[^/\\s]+/[^/\\s]+|orgs/[^/\\s]+)$"},
-          "repos": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$", "not": {"pattern": "FILL-IN"}}},
-          "token_file": {"$ref": "#/$defs/etcFile"}
+          "runners_path": {"type": "string", "pattern": "^(repos/[^/\\s]+/[^/\\s]+|orgs/[^/\\s]+)$", "description": "Where the runners are registered: repos/<owner>/<repo> or orgs/<org>."},
+          "repos": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$", "not": {"pattern": "FILL-IN"}}, "description": "The repositories whose queued jobs these runners take."},
+          "token_file": {"$ref": "#/$defs/etcFile", "description": "File holding this source's read-only token."}
         }
       }
     },
     "machines": {
+      "description": "The machines that are woken and suspended.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -51,10 +54,10 @@
         "required": ["name", "mac", "host", "runner_prefixes"],
         "properties": {
           "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "not": {"pattern": "FILL-IN"}, "description": "Also the machine label in /metrics."},
-          "mac": {"type": "string", "pattern": "^(([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})$"},
+          "mac": {"type": "string", "pattern": "^(([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})$", "description": "MAC address of the interface Wake-on-LAN reaches."},
           "host": {"type": "string", "minLength": 1, "not": {"pattern": "FILL-IN"}, "description": "Address or host name; FILL-IN, which wakeci discover writes, is refused."},
           "ssh_user": {"type": "string", "pattern": "^[a-z_][a-z0-9_-]*$", "description": "Defaults to name."},
-          "runner_prefixes": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[^\\u0000-\\u001f\\u007f]+$", "not": {"pattern": "FILL-IN"}}},
+          "runner_prefixes": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[^\\u0000-\\u001f\\u007f]+$", "not": {"pattern": "FILL-IN"}}, "description": "Every runner whose name starts with one of these belongs to this machine."},
           "rank": {"type": "integer", "default": 1, "description": "Lower is woken first."}
         }
       }
