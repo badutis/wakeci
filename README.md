@@ -213,6 +213,10 @@ runs `doctor --offline` at the end and shows the result.
 While `"dry_run": true`, it only logs what it would do. When the log looks right, set
 `"dry_run": false` in your configuration and deploy again.
 
+**Upgrading from v0.4.0.** Deploy the new version, then run `machine/install.sh` again on
+every machine: the forced SSH command and the `sudoers` rule changed. Then run
+`wakeci doctor` (above); use `--probe` only once every machine has been updated.
+
 **Upgrading from `rackctl` (v0.1.0-v0.3.0).** The project was renamed in v0.4.0, and every
 name changed with it. The new install does not touch the old one, so on the controller host:
 
