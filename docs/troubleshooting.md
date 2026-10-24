@@ -107,9 +107,10 @@ has expired, the controller cannot read that source and suspends nothing.
 
 ## token-scope
 
-A classic personal access token with scopes that can write (`repo`, `admin:org`,
-`workflow`, ...). WakeCI only reads; a stolen classic token with these scopes can change
-your repositories. Use a fine-grained token with read access only
+A classic personal access token with a scope other than `read:*` and `user:email`
+(for example `repo`, `admin:org`, `workflow`, `user`, `write:packages`): every other scope
+can change something. WakeCI only reads; a stolen classic token with such a scope can
+change your repositories or account. Use a fine-grained token with read access only
 ([Tokens](../README.md#tokens)).
 
 ## token-perms
@@ -155,7 +156,15 @@ purpose (it would turn the post into a get).
 
 ## wake
 
-No runner of the machine came online within 3 minutes of the packet (`--wake`). In order:
+`--wake` always sends the packet, then waits for a runner of the machine to come online.
+
+**A runner was already online** (a warning): this says nothing about Wake-on-LAN, because
+GitHub still shows a runner online for a few minutes after its machine suspends. Try again
+when the machine has been asleep for 5 minutes.
+
+**The packet could not be sent:** no route from this host to `broadcast` (see [wol](#wol)).
+
+**No runner came online within 3 minutes of the packet.** In order:
 
 1. Wake-on-LAN is enabled in the machine's BIOS/UEFI (often "Wake on LAN" or "Power on by
    PCIe"), and the machine is suspended or off, not unplugged.

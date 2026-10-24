@@ -84,6 +84,10 @@ grep -q "wakeci is running" <<<"$OUT" || fail "service did not start"
 grep -q "^OK    files" <<<"$OUT" || fail "doctor: files"
 grep -q "^OK    ssh-key" <<<"$OUT" || fail "doctor: ssh-key"
 grep -q "^WARN  metrics       0.0.0.0:9105 is in use" <<<"$OUT" || fail "doctor: metrics"
+# The example's 192.0.2.255 is no interface's here; the line lists the interfaces that
+# `ip -j` reported, so it shows that they were read.
+grep -qE '^WARN  wol           192\.0\.2\.255 is not the broadcast address of any interface here \([a-z0-9]+ [0-9.]+' <<<"$OUT" \
+  || fail "doctor: wol did not read the interfaces"
 if [ "$(grep -c '^FAIL  ' <<<"$OUT")" != 1 ] || ! grep -q "^FAIL  host-key" <<<"$OUT"; then
   fail "doctor: expected only the host-key failure"
 fi

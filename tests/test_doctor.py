@@ -1,6 +1,7 @@
 import argparse
 import copy
 import errno
+import gc
 import io
 import json
 import os
@@ -10,6 +11,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+import warnings
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
@@ -267,6 +269,16 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("/etc/wakeci/token-example-org2 is missing", msg)
         self.assertIn("/etc/wakeci/token-example-org is a secret but readable by others (mode 644)", msg)
 
+    @unittest.skipIf(os.getuid() == 0, "root reads everything")
+    def test_an_unreadable_file_and_state_file(self):
+        os.chmod(self.p("/etc/wakeci/token-example-org"), 0o000)
+        state = self.p("/var/lib/wakeci/last-online.json")
+        Path(state).write_text("{}")
+        os.chmod(state, 0o400)
+        _, res = self.results("--offline")
+        self.assertIn("/etc/wakeci/token-example-org is not readable by this user", self.message(res, "files"))
+        self.assertIn("last-online.json is not writable", self.message(res, "state"))
+
     def test_a_shared_token_file_is_reported_once(self):
         self.cfg["sources"][1]["token_file"] = self.cfg["sources"][0]["token_file"]
         self.write_config()
@@ -428,6 +440,35 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("no runner at GitHub for host3", msg)
         self.assertIn("runners on no machine (they always count as free): stray-1", msg)
 
+    def test_a_runner_on_two_machines(self):
+        self.cfg["machines"][1]["runner_prefixes"] = ["host1-a-1"]  # also matched by host1-a-
+        self.write_config()
+        _, res = self.results()
+        self.assertIn("runners on more than one machine: host1-a-1", self.message(res, "runners"))
+
+    def test_the_runner_list_failing_after_the_token_checks(self):
+        original = doctor.Doctor._runners
+
+        def broken(d):
+            raise urllib.error.HTTPError("u", 502, "Bad Gateway", {}, None)
+
+        doctor.Doctor._runners = broken
+        self.addCleanup(setattr, doctor.Doctor, "_runners", original)
+        _, res = self.results()
+        self.assertEqual(self.status(res, "runners"), [doctor.FAIL])
+        self.assertIn("GitHub 502", self.message(res, "runners"))
+
+    def test_a_date_header_that_cannot_be_read(self):
+        env = self.env()
+        d = doctor.Doctor(self.config, env)
+        d.check_clock("not a date")
+        self.assertEqual([(r.id, r.status) for r in d.results], [("clock", doctor.SKIP)])
+
+    def test_ip_output_that_cannot_be_read(self):
+        self.ifaces = [{"ifname": "eth0", "addr_info": [{"local": "not-an-address", "prefixlen": 24}]}]
+        _, res = self.results("--offline")
+        self.assertIn("the interfaces could not be listed", self.message(res, "wol"))
+
     def test_github_unreachable(self):
         self.network_error = urllib.error.URLError("Temporary failure in name resolution")
         code, res = self.results()
@@ -486,6 +527,32 @@ class DoctorTest(unittest.TestCase):
         key, known = self.p("/etc/wakeci/id_ed25519"), self.p("/etc/wakeci/known_hosts")
         self.assertEqual(ssh[0], actions.ssh_check_command(first, key, known))
 
+    def test_a_probe_that_hangs(self):
+        def hang(cmd, **kw):
+            if cmd[0] == "ssh":
+                raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+            return self.fake_run(cmd, **kw)
+
+        env = self.env()
+        env.run = hang
+        res = doctor.Doctor(self.config, env, offline=False, probe=True).run()
+        probes = [r for r in res if r.id == "sleep-probe"]
+        self.assertEqual({r.status for r in probes}, {doctor.FAIL})
+        self.assertIn("did not finish in time", probes[0].message)
+
+    def test_probe_without_ssh(self):
+        def no_ssh(cmd, **kw):
+            if cmd[0] == "ssh":
+                raise FileNotFoundError("ssh")
+            return self.fake_run(cmd, **kw)
+
+        env = self.env()
+        env.run = no_ssh
+        res = doctor.Doctor(self.config, env, probe=True).run()
+        self.assertEqual(
+            [r.message for r in res if r.id == "sleep-probe"], ["ssh is not installed (the OpenSSH client)"]
+        )
+
     def test_probe_answers(self):
         m = doctor.main.machines_from(self.cfg)[0]
         for code, out, err, status, text in (
@@ -541,6 +608,35 @@ class DoctorTest(unittest.TestCase):
         code, res = self.results("--notify-test")
         self.assertEqual((code, self.status(res, "notify-test")), (1, [doctor.FAIL]))
         self.assertIn("HTTP 404", self.message(res, "notify-test"))
+
+    def test_notify_test_without_a_usable_webhook(self):
+        self.secret("notify-url", "ftp://example.com/x")
+        _, res = self.results("--notify-test")
+        self.assertEqual(self.status(res, "notify-test"), [doctor.SKIP])
+        self.assertEqual(self.posts, [])
+
+    def test_error_responses_are_closed(self):
+        # What urllib really raises: an HTTPError that holds the response body. Left open,
+        # it is cleaned up later with a ResourceWarning (Python 3.12 and later).
+        class GitHubWithBodies(FakeGitHubAPI):
+            def __call__(self, req, timeout):
+                try:
+                    return super().__call__(req, timeout)
+                except urllib.error.HTTPError as e:
+                    doctor._close(e)
+                    raise urllib.error.HTTPError(e.filename, e.code, e.msg, e.hdrs, io.BytesIO(b"{}")) from None
+
+        self.api = GitHubWithBodies(self)
+        self.codes = {"rate_limit": 401}
+        self.post_error = urllib.error.HTTPError(HOOK, 404, "Not Found", {}, io.BytesIO(b"{}"))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            _, res = self.results("--notify-test")
+            self.post_error = None
+            gc.collect()
+        self.assertEqual(self.status(res, "token"), [doctor.FAIL, doctor.FAIL])
+        self.assertEqual(self.status(res, "notify-test"), [doctor.FAIL])
+        self.assertEqual([str(w.message) for w in caught if issubclass(w.category, ResourceWarning)], [])
 
     # --- --wake ------------------------------------------------------------------------
 
@@ -600,6 +696,30 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("host1 woke: a runner came online after about 20 s", self.message(res, "wake"))
         sent = [s for s in self.socks if s[0] == "sendto"]
         self.assertEqual(sent, [("sendto", actions.magic_packet("00:00:5e:00:53:01"), ("192.0.2.255", 9))])
+
+    def test_wake_keeps_polling_after_a_failed_poll(self):
+        polls = []
+        original = doctor.Doctor._runners
+
+        def runners(d):
+            polls.append(1)
+            if len(polls) == 3:  # the first poll after the packet fails
+                raise urllib.error.URLError("timed out")
+            if len(polls) >= 4:
+                self.runners["repos/example-org/app"][0]["status"] = "online"
+            return original(d)
+
+        doctor.Doctor._runners = runners
+        self.addCleanup(setattr, doctor.Doctor, "_runners", original)
+        code, res = self.results(wake="host1")
+        self.assertEqual(code, 0, res)
+        self.assertIn("after about 20 s", self.message(res, "wake"))
+
+    def test_wake_when_the_runners_cannot_be_read(self):
+        self.codes = {"rate_limit": 401}
+        _, res = self.results(wake="host1")
+        self.assertIn("not every source could be read", self.message(res, "wake"))
+        self.assertFalse(any(s[0] == "sendto" for s in self.socks))
 
     def test_wake_that_never_comes(self):
         code, res = self.results(wake="host3")
