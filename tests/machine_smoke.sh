@@ -9,6 +9,8 @@
 set -euo pipefail
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# A command that fails without its own message still says where.
+trap 'echo "FAIL: line $LINENO: $BASH_COMMAND" >&2' ERR
 ok() { echo "ok: $*"; }
 mode_owner() { sudo stat -c '%a %U' "$1"; }
 
@@ -156,8 +158,8 @@ ok "sudo allows only the two forms"
 
 # --- wakeci doctor --probe's reading of real ssh answers ----------------------------
 # Each case either asks for a check or stops before logging in; none can suspend.
-ssh-keyscan -q -t ed25519 127.0.0.1 > "$W/kh.good" 2>/dev/null
-[ -s "$W/kh.good" ] || fail "ssh-keyscan found no host key"
+ssh-keyscan -t ed25519 127.0.0.1 > "$W/kh.good" 2>"$W/err" || fail "ssh-keyscan: $(cat "$W/err")"
+[ -s "$W/kh.good" ] || fail "ssh-keyscan found no host key: $(cat "$W/err")"
 : > "$W/kh.empty"
 ssh-keygen -q -t ed25519 -N '' -f "$W/other"
 printf '127.0.0.1 %s\n' "$(awk '{print $1" "$2}' "$W/other.pub")" > "$W/kh.changed"
