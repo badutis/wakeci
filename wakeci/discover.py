@@ -10,7 +10,9 @@ number would put ``host1`` and ``host10`` on one machine. A runner that an exist
 machine's prefix matches stays with that machine. Every other prefix becomes a machine of
 its own unless ``--machine NAME=PREFIX,...`` joins several. Prefixes that look like one
 machine (the same number: ``ci5-`` and ``runner5-cpp-``) are only suggested for joining:
-joining them wrongly would suspend a machine on which another machine's runner works.
+joining them wrongly would suspend a machine on which another machine's runner works. A
+new prefix that would also match another machine's prefix (``ci5-`` and ``ci5-cpp-``) is
+not added and is reported: its runners would belong to both machines.
 
 With ``--update`` nothing in the file is changed or removed; machines are only added.
 Only GET requests are made, and the token is never printed or written.
@@ -64,6 +66,7 @@ class Report:
     suggestions: list = field(default_factory=list)
     stale: list = field(default_factory=list)  # (machine, prefix) that no runner matches
     warnings: list = field(default_factory=list)
+    skipped: list = field(default_factory=list)  # (prefix, why) not added: it would overlap another machine
 
 
 def prefix_of(name: str) -> str:
@@ -144,6 +147,14 @@ def plan(cfg: dict, runners_by_source: dict, machine_args: dict) -> "tuple[dict,
                 raise ValueError(f"--machine {name}: {p!r} is already a prefix of an existing machine")
             if sum(p in ps for ps in machine_args.values()) > 1:
                 raise ValueError(f"--machine: {p!r} is given for more than one machine")
+            others = [(m["name"], q) for m in existing for q in m.get("runner_prefixes", [])]
+            others += [(n, q) for n, qs in machine_args.items() if n != name for q in qs]
+            for other, q in others:
+                if p.startswith(q) or q.startswith(p):
+                    raise ValueError(
+                        f"--machine {name}: {p!r} overlaps machine {other}'s prefix {q!r}: "
+                        "a runner would belong to both"
+                    )
 
     groups: dict = {}
     for source, runners in runners_by_source.items():
@@ -185,7 +196,26 @@ def plan(cfg: dict, runners_by_source: dict, machine_args: dict) -> "tuple[dict,
 
     for name, prefixes in machine_args.items():
         add(name, list(prefixes))
-    alone = sorted((g for g in groups.values() if not g.machine), key=lambda g: g.prefix)
+    # Machine.owns is startswith: a new prefix that starts another machine's prefix would
+    # take that machine's runners too. Such a prefix is not added; the other one is kept,
+    # because it is already in the file, given with --machine, or more specific.
+    candidates = sorted((g for g in groups.values() if not g.machine), key=lambda g: g.prefix)
+    claimed = [(f"machine {m['name']}'s prefix", q) for m in existing for q in m.get("runner_prefixes", [])]
+    claimed += [(f"machine {n}'s prefix", q) for n, qs in machine_args.items() for q in qs]
+    claimed += [("the new prefix", g.prefix) for g in candidates]
+    alone = []
+    for g in candidates:
+        hit = next(((what, q) for what, q in claimed if q != g.prefix and q.startswith(g.prefix)), None)
+        if hit:
+            report.skipped.append(
+                (
+                    g.prefix,
+                    f"it would also match {hit[0]} {hit[1]!r}, whose runners would then belong to both machines; "
+                    "rename these runners, or add their machine by hand with a longer prefix",
+                )
+            )
+        else:
+            alone.append(g)
     for g in alone:
         g.machine = _new_name(g.prefix, taken)
         add(g.machine, [g.prefix])
@@ -277,6 +307,9 @@ def _tokens(sources: list, files: list) -> list:
         if file:
             try:
                 out.append(github.read_token(os.path.expanduser(file)))
+            except UnicodeDecodeError:
+                # Its message would quote a byte of the file.
+                raise UsageError(f"token file for {path}: {file} is not UTF-8 text") from None
             except (OSError, ValueError) as e:
                 # The message names the file, never its content.
                 raise UsageError(f"token file for {path}: {getattr(e, 'strerror', None) or e}") from None
@@ -290,14 +323,17 @@ def _tokens(sources: list, files: list) -> list:
 def _print_report(report: Report, changed: bool, out) -> None:
     for g in report.groups:
         labels = ", ".join(g.labels)
+        machine = g.machine or "(not added)"
         print(
-            f"  {g.prefix:<20} -> {g.machine:<16} {g.runners} runners, {g.online} online  [{labels}]  {g.source}",
+            f"  {g.prefix:<20} -> {machine:<16} {g.runners} runners, {g.online} online  [{labels}]  {g.source}",
             file=out,
         )
     if report.added:
         print(f"added machines: {', '.join(report.added)}", file=out)
     for machine, prefix in report.stale:
         print(f"no runners at GitHub for {prefix!r} of machine {machine} (kept)", file=out)
+    for prefix, why in report.skipped:
+        print(f"not added: {prefix!r}: {why}", file=out)
     for s in report.suggestions:
         print(f"suggestion: {s}", file=out)
     for w in report.warnings:
@@ -311,9 +347,9 @@ def _print_report(report: Report, changed: bool, out) -> None:
         print("complete: check it with wakeci check", file=out)
 
 
-def _write(path: str, text: str) -> None:
-    """Replace the file in one step and keep the old one as PATH.bak. A symbolic link is
-    followed: the file it points to is replaced, and the link stays."""
+def _write(path: str, text: str) -> str:
+    """Replace the file in one step and keep the old one as PATH.bak; return PATH. A symbolic
+    link is followed: the file it points to is replaced (and backed up), and the link stays."""
     path = os.path.realpath(path)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".wakeci-", suffix=".tmp")
     try:
@@ -328,6 +364,7 @@ def _write(path: str, text: str) -> None:
             os.chown(tmp, st.st_uid, st.st_gid)
         shutil.copy2(path, path + ".bak")
         os.replace(tmp, path)
+        return path
     except BaseException:
         if os.path.exists(tmp):
             os.unlink(tmp)
@@ -378,8 +415,8 @@ def run(ns) -> int:
     _print_report(report, changed, err)
 
     if ns.write and changed:
-        _write(ns.update, out_text)
-        print(f"wrote {ns.update} (the old one is {ns.update}.bak)", file=err)
+        written = _write(ns.update, out_text)
+        print(f"wrote {written} (the old one is {written}.bak)", file=err)
     if ns.json:
         print(json.dumps({"config": new, "report": dataclasses.asdict(report)}, indent=2, ensure_ascii=False))
     elif not ns.write:
