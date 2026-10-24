@@ -3,6 +3,7 @@
     wakeci run CONFIG       run the controller (what the systemd unit starts)
     wakeci check CONFIG     check a configuration; exit 0 when it is valid
     wakeci discover ...     build or extend a configuration from the runners GitHub knows
+    wakeci doctor CONFIG    check everything that can be checked before the controller runs
     wakeci version          print the version
 
 ``python3 -m wakeci CONFIG``, the form used before the subcommands existed, still runs the
@@ -17,7 +18,7 @@ from typing import Optional
 
 from . import __version__, config_check
 
-COMMANDS = ("run", "check", "discover", "version")
+COMMANDS = ("run", "check", "discover", "doctor", "version")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -52,6 +53,23 @@ def _parser() -> argparse.ArgumentParser:
         "--machine", action="append", metavar="NAME=PREFIX,...", help="put these prefixes on one new machine"
     )
     disc.add_argument("--json", action="store_true", help="print the configuration and the report as JSON")
+    doc = sub.add_parser(
+        "doctor",
+        help="check everything that can be checked before the controller runs",
+        description="Checks the configuration, files, clock, tokens and their permissions, SSH keys, "
+        "Wake-on-LAN and the webhook. Run it on the controller host as the service user. "
+        "By default it changes nothing and sends nothing to a machine.",
+    )
+    doc.add_argument("config", help="path to config.json")
+    doc.add_argument("--offline", action="store_true", help="skip everything that needs the network")
+    doc.add_argument(
+        "--probe",
+        action="store_true",
+        help="ask every awake machine 'wakeci-sleep check' over SSH; a machine set up before 0.5.0 SUSPENDS instead",
+    )
+    doc.add_argument("--wake", metavar="NAME", help="send a Wake-on-LAN packet to NAME and wait for its runners")
+    doc.add_argument("--notify-test", action="store_true", help="post one test message to the webhook")
+    doc.add_argument("--json", action="store_true", help="print the results as JSON")
     sub.add_parser("version", help="print the version")
     return ap
 
@@ -87,6 +105,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     if ns.command == "check":
         return _check(ns.config, ns.paths)
+    if ns.command == "doctor":
+        from . import doctor
+
+        return doctor.run(ns)
     if ns.command == "discover":
         from . import discover
 

@@ -9,6 +9,9 @@
 set -euo pipefail
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# A command that fails without its own message still says where.
+# (Only while set -e is on: probe() turns it off to read exit codes such as 10.)
+trap 'case $- in *e*) echo "FAIL: line $LINENO: $BASH_COMMAND" >&2 ;; esac' ERR
 ok() { echo "ok: $*"; }
 mode_owner() { sudo stat -c '%a %U' "$1"; }
 
@@ -153,5 +156,41 @@ CODE=$?
 set -e
 [ "$CODE" = 10 ] || fail "sudo wakeci-sleep check: exit $CODE"
 ok "sudo allows only the two forms"
+
+# --- wakeci doctor --probe's reading of real ssh answers ----------------------------
+# Each case either asks for a check or stops before logging in; none can suspend.
+ssh-keyscan -t ed25519 127.0.0.1 > "$W/kh.good" 2>"$W/err" || fail "ssh-keyscan: $(cat "$W/err")"
+[ -s "$W/kh.good" ] || fail "ssh-keyscan found no host key: $(cat "$W/err")"
+: > "$W/kh.empty"
+ssh-keygen -q -t ed25519 -N '' -f "$W/other"
+printf '127.0.0.1 %s\n' "$(awk '{print $1" "$2}' "$W/other.pub")" > "$W/kh.changed"
+cp "$W/key" "$W/key.locked"
+chmod 0000 "$W/key.locked"
+cat > "$W/probe.py" <<'PY'
+import subprocess, sys
+from wakeci import actions, doctor
+from wakeci.decide import Machine
+
+key, known, host = sys.argv[1:4]
+m = Machine("m", "00:00:5e:00:53:01", host, "wakeci", ("m-",), 1)
+cmd = actions.ssh_check_command(m, key, known)
+assert cmd[-1] == "check", cmd
+done = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+print(*doctor.probe_result(m, done), sep="\t")
+PY
+probe_case() {  # key known_hosts host expected-status expected-text
+  local got
+  got="$(cd / && PYTHONPATH="$HERE" python3 "$W/probe.py" "$1" "$2" "$3")" || fail "probe.py failed"
+  if [ "${got%%$'\t'*}" != "$4" ] || ! grep -qF "$5" <<<"$got"; then
+    fail "probe with $1 $2 $3: got '$got', want $4 '$5'"
+  fi
+}
+probe_case "$W/key" "$W/kh.good" 127.0.0.1 ok "wakeci-sleep answers (state=$STATE_IDLE)"
+probe_case "$W/key" "$W/kh.empty" 127.0.0.1 fail "its host key is not in known_hosts"
+probe_case "$W/key" "$W/kh.changed" 127.0.0.1 fail "its host key does not match known_hosts"
+probe_case "$W/other" "$W/kh.good" 127.0.0.1 fail "the key is refused"
+probe_case "$W/key.locked" "$W/kh.good" 127.0.0.1 fail "the SSH key cannot be read by this user"
+probe_case "$W/key" "$W/kh.good" 192.0.2.1 skip "no SSH connection (asleep or unreachable)"
+ok "doctor --probe reads real ssh answers right"
 
 echo "machine smoke test passed"

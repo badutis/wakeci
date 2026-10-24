@@ -44,6 +44,8 @@ echo "$OUT"
 grep -q "NOT started" <<<"$OUT" || fail "service started without tokens"
 grep -q "missing token /etc/wakeci/token-example-org:" <<<"$OUT" || fail "missing token not reported"
 grep -q "missing token /etc/wakeci/notify-url:" <<<"$OUT" || fail "missing webhook URL not reported"
+grep -q "^FAIL  files         /etc/wakeci/token-example-org is missing" <<<"$OUT" || fail "doctor did not run or missed the token"
+[ -f /opt/wakeci/controller/doctor.py ] || fail "doctor.py not kept in /opt/wakeci/controller"
 id wakeci >/dev/null || fail "no wakeci user"
 [ "$(getent passwd wakeci | cut -d: -f7)" = /usr/sbin/nologin ] || fail "wakeci can log in"
 [ "$(mode_owner /etc/wakeci)" = "750 root" ] || fail "/etc/wakeci: $(mode_owner /etc/wakeci)"
@@ -77,6 +79,18 @@ step "second install, in place, with --ram-journal: starts, keeps the key"
 OUT="$(sudo bash /opt/wakeci/controller/install.sh --ram-journal 2>&1)" || { echo "$OUT"; fail "second install failed"; }
 echo "$OUT"
 grep -q "wakeci is running" <<<"$OUT" || fail "service did not start"
+# doctor --offline as the service user: everything local is fine except the host keys of
+# the example's machines, which do not exist here.
+grep -q "^OK    files" <<<"$OUT" || fail "doctor: files"
+grep -q "^OK    ssh-key" <<<"$OUT" || fail "doctor: ssh-key"
+grep -q "^WARN  metrics       0.0.0.0:9105 is in use" <<<"$OUT" || fail "doctor: metrics"
+# The example's 192.0.2.255 is no interface's here; the line lists the interfaces that
+# `ip -j` reported, so it shows that they were read.
+grep -qE '^WARN  wol           192\.0\.2\.255 is not the broadcast address of any interface here \([a-z0-9]+ [0-9.]+' <<<"$OUT" \
+  || fail "doctor: wol did not read the interfaces"
+if [ "$(grep -c '^FAIL  ' <<<"$OUT")" != 1 ] || ! grep -q "^FAIL  host-key" <<<"$OUT"; then
+  fail "doctor: expected only the host-key failure"
+fi
 [ "$(sudo ssh-keygen -lf /etc/wakeci/id_ed25519)" = "$FP1" ] || fail "SSH key was replaced"
 [ "$(cat /opt/wakeci/VERSION)" = smoke ] || fail "VERSION lost on an in-place run"
 grep -qx 'Storage=volatile' /etc/systemd/journald.conf.d/50-wakeci-volatile.conf || fail "--ram-journal had no effect"

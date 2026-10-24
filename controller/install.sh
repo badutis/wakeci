@@ -162,7 +162,7 @@ rm -rf "$OPT/wakeci.old"
 # The installer itself, so that tokens can be set and the install re-run later.
 if [ "$SRC" != "$OPT" ]; then
   install -d -o root -g root -m 0755 "$OPT/controller"
-  for f in install.sh check_config.py wakeci.service config.example.json; do
+  for f in install.sh check_config.py doctor.py wakeci.service config.example.json; do
     install -o root -g root -m 0644 "$HERE/$f" "$OPT/controller/$f"
   done
 fi
@@ -261,11 +261,21 @@ elif [ -f "$JOURNALD_DROPIN" ]; then
   note "$JOURNALD_DROPIN from an earlier --ram-journal run is kept; delete it to log to disk again"
 fi
 
+# What wakeci doctor sees without the network, as the service user. Shown, never fatal:
+# the lines above already say what stops the service from starting.
+run_doctor() {
+  echo
+  note "wakeci doctor --offline (the full check: sudo -u $SVC_USER $PY $OPT/controller/doctor.py $ETC/config.json):"
+  (cd / && runuser -u "$SVC_USER" -- "$PY" "$OPT/controller/doctor.py" --offline "$ETC/config.json") || true
+  echo
+}
+
 # --- the service -------------------------------------------------------------------------
 install -o root -g root -m 0644 "$HERE/wakeci.service" "$UNIT"
 systemctl daemon-reload
 systemctl enable wakeci.service >/dev/null || die "systemctl enable wakeci failed"
 if [ "$START" != yes ]; then
+  run_doctor
   note "service enabled, NOT started: fix the lines above and run again"
   exit 0
 fi
@@ -281,4 +291,5 @@ systemctl is-active --quiet wakeci.service || {
   journalctl -u wakeci.service -n 20 --no-pager >&2 || true
   die "wakeci did not stay up"
 }
+run_doctor
 note "wakeci is running: journalctl -u wakeci -f"

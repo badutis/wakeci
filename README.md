@@ -55,6 +55,7 @@ flowchart LR
 wakeci run CONFIG       run the controller (what the systemd unit starts)
 wakeci check CONFIG     check a configuration; exit 0 when it is valid
 wakeci discover ...     build or extend a configuration from the runners GitHub knows
+wakeci doctor CONFIG    check everything that can be checked before the controller runs
 wakeci version          print the version
 ```
 
@@ -79,9 +80,11 @@ and its unit runs `python3 -m wakeci run /etc/wakeci/config.json`.
 | `wakeci/cli.py` | both | the `wakeci` command |
 | `wakeci/config_check.py` | both | the configuration rules `wakeci check` and the installer apply |
 | `wakeci/discover.py` | your computer | `wakeci discover`: a configuration from the runners GitHub knows |
+| `wakeci/doctor.py` | controller | `wakeci doctor`: every check that can run before the controller does |
 | `controller/install.sh` | controller | installs or updates the controller on its host |
 | `controller/deploy.sh` | your computer | packs one version with your configuration and installs it on the host |
 | `controller/check_config.py` | both | checks a configuration before it is installed |
+| `controller/doctor.py` | controller | runs `wakeci doctor` where the package is not on the path |
 | `controller/` (other files) | controller | example configuration and the `systemd` unit |
 | `machine/wakeci-sleep` | runner machine | suspends the machine unless a job is running; `check` only reports |
 | `machine/install.sh` | runner machine | installs `wakeci-sleep`, the `sudoers` rule, the restricted key and Wake-on-LAN |
@@ -189,6 +192,22 @@ This reads the token without echoing it and writes `/etc/wakeci/<name>` (`0600`,
 `wakeci`). The name must match the `token_file` in your configuration. The webhook URL
 for notifications (below) is set the same way: `--set-token notify-url`. When every file
 is in place, run the installer again to start the service.
+
+**Check it** with `wakeci doctor`, as the service user on the controller host:
+
+```bash
+ssh -t <ssh-target> sudo -u wakeci python3 /opt/wakeci/controller/doctor.py /etc/wakeci/config.json
+```
+
+It checks the configuration, the files and their modes, the clock against GitHub's, every
+token (valid, when it expires, whether it can write, whether it can read the runners and
+jobs), the SSH key and host keys, the Wake-on-LAN address and the webhook. Each warning or
+failure links to its section in [docs/troubleshooting.md](docs/troubleshooting.md). By
+default it changes nothing and sends nothing to a machine; `--wake NAME` sends a real
+Wake-on-LAN packet and waits for the machine's runners, `--notify-test` posts a test
+message, and `--probe` asks every awake machine `wakeci-sleep check` (a machine set up
+before 0.5.0 suspends instead: run `machine/install.sh` on it again first). The installer
+runs `doctor --offline` at the end and shows the result.
 
 **Watch it** with `journalctl -u wakeci -f` and `curl http://<host>:9105/metrics`.
 While `"dry_run": true`, it only logs what it would do. When the log looks right, set

@@ -19,6 +19,9 @@ the repository.
   local servers, never the real GitHub.
 - **`/metrics` names are a contract.** Renaming one breaks the monitoring of every user;
   `tests/test_io.py` pins them. A new metric is fine, a renamed one is a breaking change.
+- **A new `wakeci doctor` check** gets an id in `doctor.IDS` and a section of that name in
+  `docs/troubleshooting.md` (a test keeps them in step). By default a check changes nothing
+  and sends nothing to a machine; anything that does goes behind its own flag.
 - **The configuration format is versioned** (`config_version`). An incompatible change raises
   it, updates `docs/config.schema.json` and `wakeci/config_check.py` together (a test keeps
   them in step), and says how to migrate in the changelog.
