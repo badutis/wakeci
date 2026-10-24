@@ -417,7 +417,11 @@ def run(ns) -> int:
     _print_report(report, changed, err)
 
     if ns.write and changed:
-        written = _write(ns.update, out_text)
+        try:
+            written = _write(ns.update, out_text)
+        except OSError as e:
+            print(f"wakeci discover: cannot write {ns.update}: {e.strerror or e}", file=err)
+            return 1
         print(f"wrote {written} (the old one is {written}.bak)", file=err)
     if ns.json:
         print(json.dumps({"config": new, "report": dataclasses.asdict(report)}, indent=2, ensure_ascii=False))

@@ -75,11 +75,15 @@ and its unit runs `python3 -m wakeci run /etc/wakeci/config.json`.
 | `wakeci/github.py` | controller | reads runners and queued jobs (GET only, ETag caching) |
 | `wakeci/actions.py` | controller | Wake-on-LAN packet, suspend over SSH |
 | `wakeci/main.py` | controller | the loop, `/metrics`, the state file |
+| `wakeci/notify.py` | controller | webhook notifications (Discord, Slack, JSON) |
+| `wakeci/cli.py` | both | the `wakeci` command |
+| `wakeci/config_check.py` | both | the configuration rules `wakeci check` and the installer apply |
+| `wakeci/discover.py` | your computer | `wakeci discover`: a configuration from the runners GitHub knows |
 | `controller/install.sh` | controller | installs or updates the controller on its host |
 | `controller/deploy.sh` | your computer | packs one version with your configuration and installs it on the host |
 | `controller/check_config.py` | both | checks a configuration before it is installed |
 | `controller/` (other files) | controller | example configuration and the `systemd` unit |
-| `machine/wakeci-sleep` | runner machine | suspends the machine unless a job is running |
+| `machine/wakeci-sleep` | runner machine | suspends the machine unless a job is running; `check` only reports |
 | `machine/install.sh` | runner machine | installs `wakeci-sleep`, the `sudoers` rule, the restricted key and Wake-on-LAN |
 | `scripts/public_safe.py` | CI, pre-push | refuses private addresses, MAC addresses, personal emails and AI attribution |
 | `scripts/pre-push`, `scripts/install-hooks.sh` | your computer | runs that check before every push |
@@ -372,7 +376,7 @@ them breaks without any error when a name changes.
 
 ```bash
 python3 -m unittest discover -s tests -t .
-shellcheck machine/install.sh machine/wakeci-sleep controller/install.sh controller/deploy.sh tests/install_smoke.sh scripts/pre-push scripts/install-hooks.sh
+shellcheck machine/install.sh machine/wakeci-sleep controller/install.sh controller/deploy.sh tests/install_smoke.sh tests/machine_smoke.sh scripts/pre-push scripts/install-hooks.sh
 python3 scripts/public_safe.py --history
 ```
 
@@ -389,7 +393,10 @@ coverage run -m unittest discover -s tests -t . && coverage report
 
 CI runs these on GitHub-hosted runners, and also `tests/install_smoke.sh` on x86_64 and on
 arm64. That script installs the controller from scratch on a clean Ubuntu with systemd and
-starts it with fake tokens. It changes the system, so never run it on a real host. CI never
+starts it with fake tokens. `tests/machine_smoke.sh` installs the machine side and talks to
+it through a real sshd with the restricted key: it checks the modes, the `sudoers` rule,
+that client commands never run and that a second install changes nothing, and it only ever
+asks for a check, never a suspend. Both change the system, so never run them on a real host. CI never
 runs on the self-hosted runners, because those are the machines this controller suspends.
 
 **Nothing installation-specific goes into this repository.** That means no real IP or

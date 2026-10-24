@@ -104,7 +104,7 @@ that hour. If one of them needs a reboot, `wakeci-sleep` reboots instead of susp
 | Asset | If stolen |
 |---|---|
 | GitHub token | read the job queue and the runner list of that source |
-| SSH key | suspend a machine on which no job is running, or reboot it if an update is waiting for a reboot |
+| SSH key | suspend a machine on which no job is running, or reboot it if an update is waiting for a reboot; learn whether a job is running (`wakeci-sleep check`) |
 | Wake-on-LAN | nothing to steal; anyone on the segment can wake a machine |
 
 `install.sh` removes any other line in `authorized_keys` that carries the same key

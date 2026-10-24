@@ -180,6 +180,14 @@ class PlanTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "overlaps"):
                 self.plan(cfg_with(machine), [runner("ci1"), *runners], machines)
 
+    def test_one_prefix_in_two_sources_is_one_machine(self):
+        new, report = discover.plan(
+            cfg_with(HOST1), {"repos/example-org/app": [runner("ci5-1")], "orgs/example-org2": [runner("ci5-2")]}, {}
+        )
+        self.assertEqual(report.added, ["ci5"])
+        group = next(g for g in report.groups if g.prefix == "ci5-")
+        self.assertEqual((group.runners, group.source), (2, "repos/example-org/app, orgs/example-org2"))
+
     def test_groups_count_runners_online_and_labels(self):
         _, report = self.plan(
             cfg_with(HOST1),
@@ -335,6 +343,64 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--machine a is given twice", err)
 
+    def test_a_failed_write_leaves_the_file_and_no_temporary_file(self):
+        before = Path(self.config).read_text()
+        with mock.patch.object(discover.os, "replace", side_effect=OSError(28, "No space left on device")):
+            code, _, err = self.update("--write")
+        self.assertEqual(code, 1)
+        self.assertIn("cannot write", err)
+        self.assertIn("No space left on device", err)
+        self.assertEqual(Path(self.config).read_text(), before)
+        self.assertEqual(sorted(os.listdir(self.dir.name)), ["config.json", "config.json.bak", "token"])
+
+    def test_token_file_problems(self):
+        for content, text in ((None, "No such file or directory"), ("\n", "empty token")):
+            path = os.path.join(self.dir.name, "t2")
+            if content is not None:
+                Path(path).write_text(content)
+            code, _, err = run(["--update", self.config, "--token", f"repos/example-org/app={path}"], self.github)
+            self.assertEqual(code, 2, text)
+            self.assertIn(text, err)
+
+    def test_an_unreadable_configuration(self):
+        for content in ("{", "[]", '{"sources": 1}', '{"sources": [{"repos": []}]}'):
+            Path(self.config).write_text(content)
+            code, _, err = self.update()
+            self.assertEqual(code, 1, content)
+            self.assertIn("cannot be read", err)
+        os.unlink(self.config)
+        code, _, err = self.update()
+        self.assertEqual(code, 1)
+
+    def test_network_errors_name_the_cause_only(self):
+        for exc, text in (
+            (urllib.error.URLError("timed out"), "network: timed out"),
+            (RuntimeError(f"boom {TOKEN}"), "RuntimeError"),
+        ):
+
+            def fail(req, timeout, exc=exc):
+                raise exc
+
+            code, out, err = run(["--update", self.config, "--token", f"repos/example-org/app={self.token}"], fail)
+            self.assertEqual(code, 1)
+            self.assertIn(text, err)
+            self.assertNotIn(TOKEN, out + err)
+
+    def test_the_403_hint(self):
+        self.github.fail = 403
+        _, _, err = self.update()
+        self.assertIn("cannot read this source's self-hosted runners, or its rate limit is used up", err)
+
+    def test_overlaps_already_in_the_file_are_warned_about(self):
+        cfg = json.loads(Path(self.config).read_text())
+        cfg["machines"].append(
+            dict(HOST1, name="other", mac="00:00:5e:00:53:09", host="192.0.2.9", runner_prefixes=["host1-a-x"])
+        )
+        Path(self.config).write_text(json.dumps(cfg))
+        code, _, err = self.update()
+        self.assertEqual(code, 0, err)
+        self.assertIn("warning: a runner whose name starts with 'host1-a-x' belongs to both host1 and other", err)
+
     def test_more_than_one_page_of_runners(self):
         self.github.by_path["repos/example-org/app"] = [runner(f"ci{i}-1") for i in range(150)]
         code, out, err = self.update()
@@ -402,6 +468,9 @@ class CommandTest(unittest.TestCase):
             (["--source", "repos/o/r", "--repos", "o/r", "--token-file", "a", "--write"], "--write needs --update"),
             (["--update", "c.json", "--machine", "x"], "NAME=PREFIX"),
             (["--update", "c.json", "--token", "x"], "SOURCE=FILE"),
+            (["--source", "repos/o/r", "--repos", "o/r", "--token", "repos/o/r=a"], "--token is for --update"),
+            (["--source", "repos/o/r", "--repos", "o r"], "<owner>/<repo>"),
+            (["--update", self.config, "--token", "repos/x/y=a"], "a source the file does not have"),
         ):
             code, _, err = run(args, self.github)
             self.assertEqual(code, 2, args)
