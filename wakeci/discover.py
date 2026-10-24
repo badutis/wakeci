@@ -341,6 +341,8 @@ def _print_report(report: Report, changed: bool, out) -> None:
     if report.to_fill:
         print(f"fill in: {', '.join(report.to_fill)}", file=out)
         print(f"not deployable yet: {len(report.to_fill)} fields to fill", file=out)
+    elif not changed and report.skipped:
+        print(f"nothing added: {len(report.skipped)} prefixes not added (above)", file=out)
     elif not changed:
         print("nothing to add", file=out)
     else:

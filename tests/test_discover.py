@@ -174,6 +174,7 @@ class PlanTest(unittest.TestCase):
             ({"m": ["ci5-"]}, [runner("ci5-1")]),  # the existing machine has "ci"
             ({"m": ["c"]}, [runner("ci5-1")]),
             ({"m": ["x-a-"], "n": ["x-"]}, [runner("x-a-1"), runner("x-1")]),
+            ({"m": ["x-"], "n": ["x-a-"]}, [runner("x-a-1"), runner("x-1")]),
         ):
             machine = dict(HOST1, name="a", runner_prefixes=["ci"])
             with self.assertRaisesRegex(ValueError, "overlaps"):
@@ -365,6 +366,7 @@ class CommandTest(unittest.TestCase):
         code, _, err = self.update()
         self.assertEqual(code, 0, err)
         self.assertIn("not added: 'host1-'", err)
+        self.assertTrue(err.endswith("nothing added: 1 prefixes not added (above)\n"), err[-80:])
 
     def test_the_token_is_never_shown(self):
         for fail in (None, 401, 403, 404, 500):
