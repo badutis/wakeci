@@ -99,8 +99,9 @@ zensical build --strict
 ```
 
 CI builds it with `--strict` on every pull request (a broken link fails the build). It is
-published to GitHub Pages from each release tag, so it describes the version people
-install. After changing `docs/config.schema.json`, run `python3 scripts/config_reference.py`;
+published to GitHub Pages from each release tag (`.github/workflows/pages.yml`), so it
+describes the version people install. That workflow needs two repository settings once:
+Pages built by GitHub Actions, and a `v*` tag rule on the `github-pages` environment. After changing `docs/config.schema.json`, run `python3 scripts/config_reference.py`;
 a test fails while the tables are out of date.
 
 ## Releases

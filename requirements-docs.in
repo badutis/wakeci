@@ -1,4 +1,4 @@
-# Builds the documentation site (docs.yml). Not needed to run or develop WakeCI.
+# Builds the documentation site (ci.yml job docs, pages.yml). Not needed to run WakeCI.
 # Every version is at least two weeks old when pinned; compile with:
 #   pip-compile --allow-unsafe --generate-hashes --output-file=requirements-docs.txt --strip-extras requirements-docs.in
 zensical==0.0.69

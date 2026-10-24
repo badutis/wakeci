@@ -1,6 +1,10 @@
 # Publishes the documentation site to GitHub Pages from a release tag, so the site describes
 # the version people install. Run it by hand on a tag (not a branch) to publish that tag's
 # site again. Pull requests only build it (ci.yml, job docs).
+#
+# Repository settings it needs (once): Settings > Pages > Source: GitHub Actions; and
+# Settings > Environments > github-pages > Deployment branches and tags: add the tag rule
+# "v*" (by default only the default branch may deploy, which refuses a tag).
 name: Pages
 
 on:
@@ -17,10 +21,15 @@ concurrency:
 
 jobs:
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      # A run by hand from a branch would otherwise end green with nothing published.
+      - name: Only from a release tag
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "::error::run this workflow on a release tag (v*), not on ${GITHUB_REF}"
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

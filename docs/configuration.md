@@ -82,7 +82,8 @@ job asks for. This is the same rule GitHub uses to assign jobs.
 
 Every runner whose name starts with one of a machine's `runner_prefixes` belongs to that
 machine. `rank`: lower ranks are woken first, so give faster machines a lower number.
-`name` is also the machine label in `/metrics`.
+`name` may hold letters, digits, `.`, `_` and `-`: it is also the machine label in
+`/metrics`.
 
 Every machine needs its own MAC and host, and no two machines may share a runner prefix.
 A prefix should end where the number ends (`host1-`, not `host1`): otherwise `host1`

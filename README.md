@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/badutis/wakeci/actions/workflows/ci.yml/badge.svg)](https://github.com/badutis/wakeci/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/badutis/wakeci)](https://github.com/badutis/wakeci/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/badutis/wakeci/blob/main/LICENSE)
 
 **Self-hosted GitHub Actions runners that sleep when there is no work.**
 
@@ -42,18 +42,18 @@ flowchart LR
 
 ## Documentation
 
-**[badutis.github.io/wakeci](https://badutis.github.io/wakeci/)**, also readable here in
-[`docs/`](docs/index.md):
+In [`docs/`](https://github.com/badutis/wakeci/blob/main/docs/index.md) (from the next release also at
+[badutis.github.io/wakeci](https://badutis.github.io/wakeci/)):
 
-- [Getting started](docs/getting-started.md): from runners on GitHub to a controller in
+- [Getting started](https://github.com/badutis/wakeci/blob/main/docs/getting-started.md): from runners on GitHub to a controller in
   `dry_run`, step by step;
-- [Install](docs/install.md), [Configuration](docs/configuration.md),
-  [Generating a configuration](docs/discover.md), [Commands](docs/commands.md);
-- [Troubleshooting](docs/troubleshooting.md): what each `wakeci doctor` finding means;
-- [Monitoring](docs/monitoring.md): notifications and metrics;
-- [How it works](docs/design.md): decisions, the security model and the known limits;
-- [Development](docs/development.md); [CONTRIBUTING.md](CONTRIBUTING.md),
-  [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md).
+- [Install](https://github.com/badutis/wakeci/blob/main/docs/install.md), [Configuration](https://github.com/badutis/wakeci/blob/main/docs/configuration.md),
+  [Generating a configuration](https://github.com/badutis/wakeci/blob/main/docs/discover.md), [Commands](https://github.com/badutis/wakeci/blob/main/docs/commands.md);
+- [Troubleshooting](https://github.com/badutis/wakeci/blob/main/docs/troubleshooting.md): what each `wakeci doctor` finding means;
+- [Monitoring](https://github.com/badutis/wakeci/blob/main/docs/monitoring.md): notifications and metrics;
+- [How it works](https://github.com/badutis/wakeci/blob/main/docs/design.md): decisions, the security model and the known limits;
+- [Development](https://github.com/badutis/wakeci/blob/main/docs/development.md); [CONTRIBUTING.md](https://github.com/badutis/wakeci/blob/main/CONTRIBUTING.md),
+  [SECURITY.md](https://github.com/badutis/wakeci/blob/main/SECURITY.md), [CHANGELOG.md](https://github.com/badutis/wakeci/blob/main/CHANGELOG.md).
 
 ## In short
 
@@ -65,7 +65,7 @@ sudo -u wakeci python3 /opt/wakeci/controller/doctor.py /etc/wakeci/config.json 
 ```
 
 Then a week in `"dry_run": true`, and turn it on. Each step is explained in
-[Getting started](docs/getting-started.md).
+[Getting started](https://github.com/badutis/wakeci/blob/main/docs/getting-started.md).
 
 ## Status
 

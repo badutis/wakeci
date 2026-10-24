@@ -53,7 +53,9 @@ class DocsTest(unittest.TestCase):
 
     def test_the_readme_links_to_pages_that_exist(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        links = re.findall(r"\]\((docs/[^)#]+)", readme)
+        # Absolute: the README is also the package's description, where relative links break.
+        self.assertNotRegex(readme, r"\]\((?!https?://|#)[^)]+\)")
+        links = re.findall(r"\]\(https://github\.com/badutis/wakeci/blob/main/([^)#]+)", readme)
         self.assertTrue(links)
         for link in links:
             self.assertTrue((ROOT / link).exists(), link)
