@@ -68,6 +68,13 @@ because the API reports a busy runner late. Exit codes:
 | `0` | suspends in 5 s (so the SSH session ends cleanly) |
 | `3` | refused: a job is running |
 | `4` | reboots in 5 s instead, because an update asked for a reboot |
+| `2` | refused: an argument it does not know |
+| `10` | `wakeci-sleep check`: nothing changed; it printed `wakeci-sleep protocol=1 state=<busy\|would-reboot\|would-suspend>` |
+
+The controller sends no command. A command the client does send never runs: the forced
+command adds the word `check` when there is one (`${SSH_ORIGINAL_COMMAND:+check}`), and
+`sudoers` allows the script only with no argument or with `check`. So the most a client
+with the key can do besides suspending is ask what a suspend would do.
 
 If suspending fails, the machine counts as in use again and its idle timer restarts.
 The third failure in a row is logged as an error. For 5 minutes after a suspend command
@@ -89,7 +96,8 @@ that hour. If one of them needs a reboot, `wakeci-sleep` reboots instead of susp
   or disable runners or workflows.
 - It never acts as a runner itself, and CI jobs cannot reach it.
 - It never runs a command of its choosing on a machine. The machine allows exactly one
-  command for its key, and `sudoers` allows exactly that one script without a password.
+  command for its key, and `sudoers` allows exactly that one script, with no argument or
+  with `check`, without a password.
 
 ## Security
 

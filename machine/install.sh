@@ -31,6 +31,12 @@ id "$USER_NAME" >/dev/null 2>&1 || die "--user must be an existing account"
 id "$CI_USER" >/dev/null 2>&1 || die "--ci-user must be an existing account (the one that runs CI jobs)"
 # Compared by UID: one user can have several names.
 [ "$(id -u "$USER_NAME")" != "$(id -u "$CI_USER")" ] || die "--user cannot be $CI_USER: that account runs CI code"
+# sshd runs the forced command (step 3) with this account's login shell.
+USER_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
+case "$(basename "$USER_SHELL")" in
+  sh|dash|bash) ;;
+  *) die "--user $USER_NAME has the login shell $USER_SHELL: give it /bin/sh or /bin/bash (usermod -s /bin/sh $USER_NAME)" ;;
+esac
 [ -f "$PUBKEY" ] || die "--pubkey file not found"
 [ "$(grep -c . "$PUBKEY")" -eq 1 ] || die "--pubkey file must hold exactly one key"
 grep -qE '^ssh-(ed25519|rsa) ' "$PUBKEY" || die "--pubkey is not an SSH public key"
@@ -40,14 +46,20 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # 1. The suspend command.
 install -o root -g root -m 0755 "$HERE/wakeci-sleep" /usr/local/sbin/wakeci-sleep
 
-# 2. sudo without a password, for this command only. Checked before it is put in place.
+# 2. sudo without a password, for this command only, with no argument or with "check".
+# Checked before it is put in place.
 SUDOERS_TMP="$(mktemp)"
-echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep" > "$SUDOERS_TMP"
+{
+  echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep \"\""
+  echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/wakeci-sleep check"
+} > "$SUDOERS_TMP"
 visudo -cf "$SUDOERS_TMP" >/dev/null || die "invalid sudoers line"
 install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/wakeci-sleep
 rm -f "$SUDOERS_TMP"
 
-# 3. The controller's key, restricted to one command.
+# 3. The controller's key, restricted to one command. A command the client sends (sshd
+# puts it in SSH_ORIGINAL_COMMAND) never runs: any non-empty one only adds the literal
+# word "check", so the client can ask what would happen instead of suspending.
 HOME_DIR="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 0700 "$HOME_DIR/.ssh"
 AUTH="$HOME_DIR/.ssh/authorized_keys"
@@ -55,7 +67,7 @@ touch "$AUTH"
 chown "$USER_NAME:$USER_NAME" "$AUTH"
 chmod 0600 "$AUTH"
 KEY="$(awk '{print $1" "$2}' "$PUBKEY")"
-WANT="command=\"sudo -n /usr/local/sbin/wakeci-sleep\",restrict $KEY wakeci"
+WANT="command=\"sudo -n /usr/local/sbin/wakeci-sleep \${SSH_ORIGINAL_COMMAND:+check}\",restrict $KEY wakeci"
 # Any other line with the same key (say, added by hand while testing, without the
 # restriction) is removed: this key must never give a full shell.
 FILTERED="$(mktemp)"

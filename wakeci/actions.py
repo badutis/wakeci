@@ -24,11 +24,15 @@ def wake(machine: Machine, broadcast: str = "255.255.255.255", port: int = 9) ->
 # Exit codes of `wakeci-sleep` (machine/wakeci-sleep). It schedules the suspend a few seconds
 # ahead and exits first, so the SSH session ends cleanly instead of being cut off.
 # A result that starts with one of SLEEP_OK means the machine is going down.
+# SLEEP_CHECKED answers `wakeci-sleep check`, which the controller never sends.
 SLEEP_OK = ("suspends", "reboots")
+SLEEP_CHECKED = 10
 SLEEP_EXIT = {
     0: "suspends in 5 s",
+    2: "refused: wakeci-sleep was given an argument it does not know",
     3: "refused: a job is running on the machine",
     4: "reboots in 5 s: an update asked for a reboot",
+    SLEEP_CHECKED: "answered a check and did not suspend",
 }
 
 
