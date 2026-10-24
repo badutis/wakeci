@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: shellcheck machine/install.sh machine/wakeci-sleep controller/install.sh controller/deploy.sh tests/install_smoke.sh scripts/pre-push scripts/install-hooks.sh
+      - run: shellcheck machine/install.sh machine/wakeci-sleep controller/install.sh controller/deploy.sh tests/install_smoke.sh tests/machine_smoke.sh scripts/pre-push scripts/install-hooks.sh
 
   # Installs the controller from scratch on a clean Ubuntu with systemd, as a host would
   # get it from controller/deploy.sh, and starts it with fake tokens: on x86_64 here and on
@@ -83,6 +83,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tests/install_smoke.sh
+
+  # Installs the machine side (machine/install.sh) on a clean Ubuntu and talks to it
+  # through a real sshd with the controller's restricted key: only checks, never a suspend.
+  machine-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: tests/machine_smoke.sh
 
   # Every commit of a pull request is signed off (Developer Certificate of Origin).
   dco:

@@ -41,12 +41,12 @@ python3 -m unittest discover -s tests -t .
 ruff check . && ruff format --check . && mypy
 coverage run -m unittest discover -s tests -t . && coverage report
 shellcheck machine/install.sh machine/wakeci-sleep controller/install.sh controller/deploy.sh \
-  tests/install_smoke.sh scripts/pre-push scripts/install-hooks.sh
+  tests/install_smoke.sh tests/machine_smoke.sh scripts/pre-push scripts/install-hooks.sh
 python3 scripts/public_safe.py --history
 ```
 
 CI runs all of these, plus the install smoke test on x86_64 and arm64 (it changes the
-system, so it only runs there). Never run `tests/install_smoke.sh` on a real host.
+system, so it only runs there). Never run `tests/install_smoke.sh` or `tests/machine_smoke.sh` on a real host.
 
 Add a line under `## [Unreleased]` in `CHANGELOG.md` for anything a user would notice.
 
