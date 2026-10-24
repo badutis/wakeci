@@ -43,11 +43,12 @@ from . import __version__, actions, config_check, github, main, notify
 DOCS = "https://github.com/badutis/wakeci/blob/main/docs/troubleshooting.md"
 OK, WARN, FAIL, SKIP = "ok", "warn", "fail", "skip"
 CLOCK_LIMIT = timedelta(minutes=2)
+TIMED_OUT = -9  # the exit code _cmd gives a command that did not finish in time
 EXPIRY_WARN = timedelta(days=14)
 WAKE_WAIT = 180  # seconds a woken machine has to bring a runner online
 WAKE_POLL = 10
-# Classic token scopes that allow more than reading.
-WRITE_SCOPES = ("repo", "public_repo", "admin:org", "write:org", "workflow", "admin:repo_hook", "delete_repo")
+# Classic token scopes that only read; every other scope can change something.
+READ_SCOPES = ("user:email",)  # and every "read:..." scope
 SECRET_KINDS = ("ssh_key", "token")  # token also covers the webhook URL file
 # Every check id; docs/troubleshooting.md has a section for each (a test keeps them in step).
 IDS = (
@@ -97,24 +98,32 @@ class Doctor:
     def run(self) -> list[Result]:
         if not self.check_config():
             return self.results
-        self.check_files()
-        self.check_state()
-        self.check_metrics()
-        self.check_ssh_key()
-        self.check_host_keys()
-        self.check_wol()
-        self.check_notify()
+        checks = [
+            ("files", self.check_files),
+            ("state", self.check_state),
+            ("metrics", self.check_metrics),
+            ("ssh-key", self.check_ssh_key),
+            ("host-key", self.check_host_keys),
+            ("wol", self.check_wol),
+            ("notify", self.check_notify),
+        ]
         if self.offline:
             for id in ("clock", "token", "token-perms", "runners"):
                 self.add(id, SKIP, "--offline")
         else:
-            self.check_github()
+            checks.append(("token", self.check_github))
         if self.probe:
-            self.check_probe()
+            checks.append(("sleep-probe", self.check_probe))
         if self.notify_test:
-            self.check_notify_test()
+            checks.append(("notify-test", self.check_notify_test))
         if self.wake_name:
-            self.check_wake()
+            checks.append(("wake", self.check_wake))
+        for id, check in checks:
+            try:
+                check()
+            except Exception as e:  # noqa: BLE001 — one broken check must not hide the others
+                # Only the kind: the text of an unexpected error could hold a secret.
+                self.add(id, FAIL, f"the check itself failed ({type(e).__name__}); please report it")
         return self.results
 
     # --- local -----------------------------------------------------------------------
@@ -135,7 +144,7 @@ class Doctor:
 
     def check_files(self) -> None:
         bad = False
-        for kind, value in self.lines:
+        for kind, value in dict.fromkeys(self.lines):  # sources may share a token file
             if kind == "host":
                 continue
             p = self.env.path(value)
@@ -187,11 +196,13 @@ class Doctor:
 
     def _cmd(self, cmd: list, timeout: float = 15) -> "Optional[subprocess.CompletedProcess]":
         try:
-            return self.env.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return self.env.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout)
         except FileNotFoundError:
             return None
         except subprocess.TimeoutExpired:
-            return subprocess.CompletedProcess(cmd, 255, "", "timed out")
+            return subprocess.CompletedProcess(cmd, TIMED_OUT, "", "")
+        except OSError as e:
+            return subprocess.CompletedProcess(cmd, 126, "", f"cannot run {cmd[0]}: {e.strerror or e}")
 
     def check_ssh_key(self) -> None:
         key = self.env.path(self.cfg["ssh_key"])
@@ -285,7 +296,10 @@ class Doctor:
             self.add("notify", FAIL, f"{n['url_file']} cannot be read or does not hold an https URL")
             return
         host = (urllib.parse.urlsplit(url).hostname or "").lower()
-        expect = {"discord": ("discord.com", "discordapp.com"), "slack": ("hooks.slack.com",)}.get(n["format"])
+        expect = {
+            "discord": ("discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"),
+            "slack": ("hooks.slack.com",),
+        }.get(n["format"])
         if expect and host not in expect:
             # The host of a webhook URL is not secret; its path is.
             self.add("notify", WARN, f"format {n['format']} but the URL's host is {host}, not {expect[0]}")
@@ -384,7 +398,7 @@ class Doctor:
         if value is None:
             return  # a fine-grained token: its permissions are not in the headers
         scopes = [s.strip() for s in value.split(",") if s.strip()]
-        broad = [s for s in scopes if s in WRITE_SCOPES]
+        broad = [s for s in scopes if not (s.startswith("read:") or s in READ_SCOPES)]
         if broad:
             self.add(
                 "token-scope",
@@ -393,7 +407,7 @@ class Doctor:
                 "use a fine-grained token with read access only",
             )
         else:
-            self.add("token-scope", OK, f"{path}: a classic token without write scopes")
+            self.add("token-scope", OK, f"{path}: a classic token with read scopes only")
 
     def check_perms(self, path: str, repos: list, token: str) -> bool:
         bad = []
@@ -493,10 +507,20 @@ class Doctor:
         if now_on is None:
             self.add("wake", FAIL, "not every source could be read (see token), so a wake cannot be seen")
             return
-        if now_on:
-            self.add("wake", OK, f"{m.name} already has a runner online; nothing was sent")
+        try:
+            actions.wake(m, self.cfg["broadcast"], sock=self.env.sock)
+        except OSError as e:
+            self.add("wake", FAIL, f"the packet could not be sent to {self.cfg['broadcast']}: {e.strerror or e}")
             return
-        actions.wake(m, self.cfg["broadcast"], sock=self.env.sock)
+        if now_on:
+            # GitHub shows a runner online for a few minutes after its machine suspends.
+            self.add(
+                "wake",
+                WARN,
+                f"a packet was sent, but {m.name} already had a runner online, so this does not show that "
+                "Wake-on-LAN works: try again when it has been asleep for 5 minutes",
+            )
+            return
         waited = 0
         while waited < WAKE_WAIT:
             self.env.sleep(WAKE_POLL)
@@ -533,10 +557,16 @@ def probe_result(m, done: subprocess.CompletedProcess) -> "tuple[str, str]":
         )
     if code == 1 and "password" in err.lower():
         return FAIL, f"{m.name}: sudo asks for a password: the sudoers rule is missing; run machine/install.sh again"
+    if code == TIMED_OUT:
+        return FAIL, f"{m.name}: SSH did not finish in time (connected, but no answer)"
     if code == 255:
         low = err.lower()
-        if "host key verification failed" in low or "remote host identification has changed" in low:
+        if "remote host identification has changed" in low:
             return FAIL, f"{m.name}: its host key does not match known_hosts"
+        if "host key is known" in low or "host key verification failed" in low:
+            return FAIL, f"{m.name}: its host key is not in known_hosts (see host-key)"
+        if "load key" in low:
+            return FAIL, f"{m.name}: the SSH key cannot be read by this user"
         if "permission denied" in low:
             return FAIL, f"{m.name}: the key is refused: it is not in {m.ssh_user}'s authorized_keys"
         return SKIP, f"{m.name}: no SSH connection (asleep or unreachable)"

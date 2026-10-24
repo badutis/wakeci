@@ -34,8 +34,10 @@ The SSH key, `known_hosts`, a token file or the webhook URL file is missing, unr
 the service user, a symbolic link, or a secret that others can read.
 
 - A missing token or webhook URL: `sudo bash /opt/wakeci/controller/install.sh --set-token NAME`.
-- Unreadable or wrong owner: run `sudo bash /opt/wakeci/controller/install.sh` again; it sets
-  owners and modes (`0600` for secrets, owned by `wakeci`).
+- An unreadable token or webhook URL file: write it again with `--set-token NAME`, which
+  gives it the right owner and mode (`0600`, owned by `wakeci`).
+- An unreadable SSH key or `known_hosts`: run `sudo bash /opt/wakeci/controller/install.sh`
+  again; it sets their owners and modes.
 - A secret readable by others: `sudo chmod 0600 FILE`.
 
 ## state
@@ -136,6 +138,10 @@ The answer of `wakeci-sleep check` over SSH (`--probe`):
 - **sudo asks for a password:** the `sudoers` rule is missing; run `machine/install.sh`.
 - **the key is refused:** the controller's public key is not in the machine user's
   `authorized_keys`; run `machine/install.sh --pubkey` with the key the installer printed.
+- **the host key is not in known_hosts:** see [host-key](#host-key).
+- **the SSH key cannot be read:** see [files](#files).
+- **SSH did not finish in time:** the machine accepted the connection but did not answer;
+  log in to it and check `sudo /usr/local/sbin/wakeci-sleep check`.
 - **the host key does not match:** the machine was reinstalled, or it is not the machine you
   think. Check, then remove the old line (`ssh-keygen -R HOST -f /etc/wakeci/known_hosts`)
   and run the controller installer again.

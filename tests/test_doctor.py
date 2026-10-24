@@ -256,6 +256,13 @@ class DoctorTest(unittest.TestCase):
         self.assertIn("/etc/wakeci/token-example-org2 is missing", msg)
         self.assertIn("/etc/wakeci/token-example-org is a secret but readable by others (mode 644)", msg)
 
+    def test_a_shared_token_file_is_reported_once(self):
+        self.cfg["sources"][1]["token_file"] = self.cfg["sources"][0]["token_file"]
+        self.write_config()
+        os.unlink(self.p("/etc/wakeci/token-example-org"))
+        _, res = self.results("--offline")
+        self.assertEqual(self.message(res, "files").count("token-example-org is missing"), 1)
+
     def test_a_symbolic_link_is_refused(self):
         target = self.p("/etc/wakeci/real")
         Path(target).write_text(TOKEN)
@@ -336,9 +343,14 @@ class DoctorTest(unittest.TestCase):
         _, res = self.results("--offline")
         self.assertEqual(self.status(res, "notify"), [doctor.WARN])
         self.assertIn("example.com", self.message(res, "notify"))
-        self.secret("notify-url", "http://example.com/hook")
-        _, res = self.results("--offline")
-        self.assertEqual(self.status(res, "notify"), [doctor.FAIL])
+        self.secret("notify-url", "http://example.com/hook/" + "S" * 20)
+        _, out = self.doctor("--offline")
+        self.assertIn("FAIL  notify", out)
+        self.assertNotIn("S" * 20, out)
+        for host in ("ptb.discord.com", "canary.discord.com"):
+            self.secret("notify-url", f"https://{host}/api/webhooks/1/x")
+            _, res = self.results("--offline")
+            self.assertEqual(self.status(res, "notify"), [doctor.OK], host)
         del self.cfg["notify"]
         self.write_config()
         _, res = self.results("--offline")
@@ -377,7 +389,11 @@ class DoctorTest(unittest.TestCase):
         _, res = self.results()
         self.assertEqual(set(self.status(res, "token-scope")), {doctor.WARN})
         self.assertIn("repo", self.message(res, "token-scope"))
-        self.token_headers = {"X-OAuth-Scopes": "read:org"}
+        for scopes in ("user", "write:packages", "read:org, gist", "manage_runners:org"):
+            self.token_headers = {"X-OAuth-Scopes": scopes}
+            _, res = self.results()
+            self.assertEqual(set(self.status(res, "token-scope")), {doctor.WARN}, scopes)
+        self.token_headers = {"X-OAuth-Scopes": "read:org, user:email"}
         _, res = self.results()
         self.assertEqual(set(self.status(res, "token-scope")), {doctor.OK})
         self.token_headers = {}
@@ -422,6 +438,11 @@ class DoctorTest(unittest.TestCase):
                 _, out = self.doctor(*flags)
                 self.assertNotIn(TOKEN, out, (codes, flags))
                 self.assertNotIn(HOOK.rsplit("/", 1)[1], out, (codes, flags))
+        self.answer("192.0.2.11", 255, "", f"error {TOKEN}")
+        _, out = self.doctor("--probe")
+        self.assertNotIn(TOKEN, out)
+        _, out = self.doctor(wake="host3")
+        self.assertNotIn(TOKEN, out)
         self.network_error = RuntimeError(f"boom {TOKEN} {HOOK}")
         self.post_error = RuntimeError(f"boom {HOOK}")
         _, out = self.doctor("--notify-test")
@@ -461,7 +482,30 @@ class DoctorTest(unittest.TestCase):
             (4, "", "", doctor.FAIL, "rebooting"),
             (3, "", "busy", doctor.FAIL, "older wakeci-sleep"),
             (1, "", "sudo: a password is required", doctor.FAIL, "sudoers rule is missing"),
-            (255, "", "Host key verification failed.", doctor.FAIL, "does not match known_hosts"),
+            (
+                255,
+                "",
+                "@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @\nHost key verification failed.",
+                doctor.FAIL,
+                "does not match known_hosts",
+            ),
+            (
+                255,
+                "",
+                "No ED25519 host key is known for 192.0.2.11 and you have requested strict checking.\n"
+                "Host key verification failed.",
+                doctor.FAIL,
+                "not in known_hosts",
+            ),
+            (
+                255,
+                "",
+                'Load key "/etc/wakeci/id_ed25519": Permission denied\n'
+                "wakeci@192.0.2.11: Permission denied (publickey).",
+                doctor.FAIL,
+                "cannot be read by this user",
+            ),
+            (doctor.TIMED_OUT, "", "", doctor.FAIL, "did not finish in time"),
             (255, "", "wakeci@192.0.2.11: Permission denied (publickey).", doctor.FAIL, "authorized_keys"),
             (255, "", "ssh: connect to host 192.0.2.11 port 22: No route to host", doctor.SKIP, "asleep"),
             (2, "", "usage", doctor.FAIL, "exit code 2"),
@@ -489,10 +533,43 @@ class DoctorTest(unittest.TestCase):
 
     # --- --wake ------------------------------------------------------------------------
 
-    def test_wake_an_awake_machine_sends_nothing(self):
+    def test_wake_an_awake_machine_proves_nothing(self):
         _, res = self.results(wake="host2")
-        self.assertIn("already has a runner online; nothing was sent", self.message(res, "wake"))
-        self.assertFalse(any(s[0] == "sendto" for s in self.socks))
+        self.assertEqual(self.status(res, "wake"), [doctor.WARN])
+        self.assertIn("does not show that Wake-on-LAN works", self.message(res, "wake"))
+        self.assertEqual(len([s for s in self.socks if s[0] == "sendto"]), 1)
+
+    def test_wake_when_the_packet_cannot_be_sent(self):
+        class NoSend(FakeSocket):
+            def sendto(self, data, addr):
+                raise OSError(errno.ENETUNREACH, "Network is unreachable")
+
+        env = self.env()
+        env.sock = lambda *a: NoSend(self.socks)
+        res = doctor.Doctor(self.config, env, wake="host1").run()
+        wake = [r for r in res if r.id == "wake"]
+        self.assertEqual([r.status for r in wake], [doctor.FAIL])
+        self.assertIn("could not be sent to 192.0.2.255: Network is unreachable", wake[0].message)
+        self.assertEqual(res[0].id, "config")  # the other results are still there
+
+    def test_a_broken_check_does_not_hide_the_others(self):
+        env = self.env()
+        env.run = lambda cmd, **kw: (_ for _ in ()).throw(RuntimeError(f"boom {TOKEN}"))
+        res = doctor.Doctor(self.config, env, offline=True).run()
+        broken = [r for r in res if r.status == doctor.FAIL]
+        self.assertEqual({r.id for r in broken}, {"ssh-key", "host-key", "wol"})  # each runs a command
+        self.assertIn("the check itself failed (RuntimeError)", broken[0].message)
+        self.assertNotIn(TOKEN, " ".join(r.message for r in res))
+        self.assertIn("notify", [r.id for r in res])
+
+    def test_a_command_that_cannot_run(self):
+        def denied(cmd, **kw):
+            raise PermissionError(13, "Permission denied")
+
+        env = self.env()
+        env.run = denied
+        res = doctor.Doctor(self.config, env, offline=True).run()
+        self.assertEqual([r.status for r in res if r.id == "ssh-key"], [doctor.FAIL])
 
     def test_wake_sends_one_packet_and_waits_for_a_runner(self):
         polls = []
