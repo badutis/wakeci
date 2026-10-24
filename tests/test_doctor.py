@@ -13,6 +13,7 @@ import urllib.error
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
+from unittest import mock
 
 from tests.test_io import FakeResponse
 from wakeci import actions, doctor, github
@@ -249,8 +250,18 @@ class DoctorTest(unittest.TestCase):
 
     def test_file_problems(self):
         os.unlink(self.p("/etc/wakeci/token-example-org2"))
-        os.chmod(self.p("/etc/wakeci/token-example-org"), 0o644)
-        code, res = self.results("--offline")
+        # The file stays 0600; doctor is shown it as readable by group and others.
+        loose = self.p("/etc/wakeci/token-example-org")
+        real_stat = os.stat
+
+        def stat(path, *a, **kw):
+            st = real_stat(path, *a, **kw)
+            if os.fspath(path) != loose:
+                return st
+            return os.stat_result((st.st_mode | 0o044, *tuple(st)[1:]))
+
+        with mock.patch.object(doctor.os, "stat", stat):
+            code, res = self.results("--offline")
         self.assertEqual(code, 1)
         msg = self.message(res, "files")
         self.assertIn("/etc/wakeci/token-example-org2 is missing", msg)

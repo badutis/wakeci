@@ -323,8 +323,8 @@ class Doctor:
                     json.loads(resp.read() or b"{}"),
                 )
         except urllib.error.HTTPError as e:
-            with e:
-                return e.code, dict(e.headers or {}), None
+            _close(e)
+            return e.code, dict(e.headers or {}), None
 
     def check_github(self) -> None:
         clock_done = False
@@ -482,7 +482,7 @@ class Doctor:
             with self.env.post(req, timeout=10) as resp:
                 resp.read()
         except urllib.error.HTTPError as e:
-            e.close()
+            _close(e)
             self.add("notify-test", FAIL, f"the webhook answered HTTP {e.code}")
             return
         except Exception as e:  # noqa: BLE001 — the text may hold the URL; only the kind is shown
@@ -571,6 +571,12 @@ def probe_result(m, done: subprocess.CompletedProcess) -> "tuple[str, str]":
             return FAIL, f"{m.name}: the key is refused: it is not in {m.ssh_user}'s authorized_keys"
         return SKIP, f"{m.name}: no SSH connection (asleep or unreachable)"
     return FAIL, f"{m.name}: unexpected answer (exit code {code})"
+
+
+def _close(e: urllib.error.HTTPError) -> None:
+    """Close an error response. One without a body (fp None) cannot be closed on Python 3.9."""
+    if getattr(e, "fp", None) is not None:
+        e.close()
 
 
 def _user() -> str:
