@@ -6,6 +6,11 @@ change raises the minor number.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-25
+
+Documentation only: the controller, the machine side and the configuration format are the
+same as in 0.5.0, so nothing needs to be reinstalled.
+
 ### Added
 - A documentation site, [badutis.github.io/wakeci](https://badutis.github.io/wakeci/), with
   a step-by-step getting-started path. It is built from `docs/` with Zensical, strictly on
@@ -104,7 +109,8 @@ The first release under the WakeCI name.
 - Installation on the controller host (`install.sh`) and from your own computer
   (`deploy.sh`), and the machine side (`machine/install.sh`).
 
-[Unreleased]: https://github.com/badutis/wakeci/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/badutis/wakeci/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/badutis/wakeci/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/badutis/wakeci/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/badutis/wakeci/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/badutis/wakeci/compare/v0.2.0...v0.3.0

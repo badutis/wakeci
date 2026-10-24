@@ -42,8 +42,8 @@ flowchart LR
 
 ## Documentation
 
-In [`docs/`](https://github.com/badutis/wakeci/blob/main/docs/index.md) (from the next release also at
-[badutis.github.io/wakeci](https://badutis.github.io/wakeci/)):
+**[badutis.github.io/wakeci](https://badutis.github.io/wakeci/)**, also readable in
+[`docs/`](https://github.com/badutis/wakeci/blob/main/docs/index.md):
 
 - [Getting started](https://github.com/badutis/wakeci/blob/main/docs/getting-started.md): from runners on GitHub to a controller in
   `dry_run`, step by step;
