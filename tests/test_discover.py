@@ -150,10 +150,35 @@ class PlanTest(unittest.TestCase):
         new, _ = self.plan(cfg_with(machine), [runner("other-1"), runner("ci5-1")])
         self.assertEqual(new["machines"][1]["name"], "ci5-2")
 
-    def test_runners_whose_names_overlap_are_reported(self):
+    def test_a_new_prefix_that_would_take_an_existing_machines_runners_is_not_added(self):
+        # ci5- would also match ci5-cpp-1, which then belonged to both machines.
+        machine = dict(HOST1, name="a", runner_prefixes=["ci5-cpp-"])
+        cfg = cfg_with(machine)
+        new, report = self.plan(cfg, [runner("ci5-cpp-1"), runner("ci5-1")])
+        self.assertEqual(new, cfg)
+        self.assertEqual(report.added, [])
+        self.assertEqual([p for p, _ in report.skipped], ["ci5-"])
+        self.assertIn("machine a's prefix 'ci5-cpp-'", report.skipped[0][1])
+        self.assertEqual(report.warnings, [])
+
+    def test_of_two_new_prefixes_the_one_that_takes_the_others_runners_is_not_added(self):
         # box1 has no separated number, so it is its own prefix, and it also matches box10.
-        _, report = self.plan(cfg_with(HOST1), [runner("box1"), runner("box10")])
-        self.assertIn("a runner whose name starts with 'box10' belongs to both box1 and box10", report.warnings)
+        new, report = self.plan(cfg_with(HOST1), [runner("box1"), runner("box10"), runner("box100")])
+        self.assertEqual(report.added, ["box100"])
+        self.assertEqual([p for p, _ in report.skipped], ["box1", "box10"])
+        self.assertEqual(report.warnings, [])
+        self.assertEqual([m["name"] for m in new["machines"]], ["host1", "box100"])
+
+    def test_a_machine_argument_must_not_overlap_another_machine(self):
+        for machines, runners in (
+            ({"m": ["ci5-"]}, [runner("ci5-1")]),  # the existing machine has "ci"
+            ({"m": ["c"]}, [runner("ci5-1")]),
+            ({"m": ["x-a-"], "n": ["x-"]}, [runner("x-a-1"), runner("x-1")]),
+            ({"m": ["x-"], "n": ["x-a-"]}, [runner("x-a-1"), runner("x-1")]),
+        ):
+            machine = dict(HOST1, name="a", runner_prefixes=["ci"])
+            with self.assertRaisesRegex(ValueError, "overlaps"):
+                self.plan(cfg_with(machine), [runner("ci1"), *runners], machines)
 
     def test_groups_count_runners_online_and_labels(self):
         _, report = self.plan(
@@ -286,6 +311,7 @@ class CommandTest(unittest.TestCase):
         self.assertTrue(os.path.islink(self.config))
         self.assertEqual(json.loads(Path(real).read_text())["machines"][1]["name"], "ci5")
         self.assertTrue(os.path.exists(real + ".bak"))
+        self.assertIn(f"the old one is {os.path.realpath(real)}.bak", err)
         st = os.stat(real)
         self.assertEqual((stat.S_IMODE(st.st_mode), st.st_uid, st.st_gid), (0o400, os.getuid(), os.getgid()))
 
@@ -326,6 +352,21 @@ class CommandTest(unittest.TestCase):
         code, _, err = run(["--update", self.config], self.github)
         self.assertEqual(code, 2)
         self.assertIn("no token for repos/example-org/app", err)
+
+    def test_a_token_file_that_is_not_text_is_not_quoted(self):
+        Path(self.token).write_bytes(b"\xfe\xedsecret")
+        code, out, err = self.update()
+        self.assertEqual(code, 2)
+        self.assertIn("is not UTF-8 text", err)
+        self.assertNotIn("0xfe", err)
+        self.assertNotIn("secret", out + err)
+
+    def test_a_skipped_prefix_is_shown(self):
+        self.github.by_path["repos/example-org/app"] = [runner("host1-a-1"), runner("host1-1")]
+        code, _, err = self.update()
+        self.assertEqual(code, 0, err)
+        self.assertIn("not added: 'host1-'", err)
+        self.assertTrue(err.endswith("nothing added: 1 prefixes not added (above)\n"), err[-80:])
 
     def test_the_token_is_never_shown(self):
         for fail in (None, 401, 403, 404, 500):

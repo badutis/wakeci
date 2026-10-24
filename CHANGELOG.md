@@ -10,7 +10,8 @@ change raises the minor number.
 - `wakeci discover`: builds a configuration from the runners GitHub knows, or adds machines
   for new runners to an existing one (`--update`, `--write`) without changing anything
   already there. Machines it cannot know the MAC or address of get `FILL-IN`; prefixes
-  that look like one machine are suggested for joining, never joined.
+  that look like one machine are suggested for joining, never joined. A new prefix that
+  would also match another machine's prefix is not added, so no runner belongs to two machines.
 
 ### Changed
 - `wakeci check` refuses a value that still holds `FILL-IN`, two machines with the same MAC
