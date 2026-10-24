@@ -6,6 +6,17 @@ change raises the minor number.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
+Getting started: a configuration generated from GitHub, and a check of everything before
+the controller runs.
+
+**Upgrading from 0.4.0:** deploy the new version to the controller host, then **run
+`machine/install.sh` again on every machine** (the forced SSH command and the `sudoers`
+rule changed). Until then, do not use `wakeci doctor --probe` on that machine: an older one
+takes the check for a suspend. Then run `wakeci doctor` on the controller host (see the
+README, "Check it").
+
 ### Added
 - `wakeci discover`: builds a configuration from the runners GitHub knows, or adds machines
   for new runners to an existing one (`--update`, `--write`) without changing anything
@@ -83,7 +94,8 @@ The first release under the WakeCI name.
 - Installation on the controller host (`install.sh`) and from your own computer
   (`deploy.sh`), and the machine side (`machine/install.sh`).
 
-[Unreleased]: https://github.com/badutis/wakeci/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/badutis/wakeci/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/badutis/wakeci/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/badutis/wakeci/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/badutis/wakeci/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/badutis/wakeci/compare/v0.1.0...v0.2.0
