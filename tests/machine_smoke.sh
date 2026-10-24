@@ -121,8 +121,10 @@ for cmd in '; touch /tmp/pwned' '$(touch /tmp/pwned)' '`touch /tmp/pwned`' 'touc
   [ "$CODE" = 10 ] || fail "client command '$cmd': exit $CODE, $(cat "$W/err")"
   [ ! -e /tmp/pwned ] || fail "client command '$cmd' ran"
 done
-probe -tt check  # restrict refuses the terminal; the check still runs
-[ "$CODE" = 10 ] || fail "with -tt: exit $CODE, $(cat "$W/err")"
+# restrict refuses a terminal. Newer clients then stop (255); older ones run the check (10).
+probe -tt check
+grep -q "PTY allocation request failed" "$W/err" || fail "a terminal was not refused: exit $CODE, $(cat "$W/err")"
+[ "$CODE" = 10 ] || [ "$CODE" = 255 ] || fail "with -tt: exit $CODE, $(cat "$W/err")"
 ok "client commands never run"
 
 # A running job is seen (the idle checks above show the runner's own worker is not).
