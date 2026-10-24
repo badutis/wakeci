@@ -343,6 +343,20 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--machine a is given twice", err)
 
+    def test_a_read_only_file_can_be_written_twice(self):
+        os.chmod(self.config, 0o400)
+        for runners in (
+            [runner("host1-a-1"), runner("ci5-1")],
+            [runner("host1-a-1"), runner("ci5-1"), runner("ci6-1")],
+        ):
+            self.github.by_path["repos/example-org/app"] = runners
+            code, _, err = self.update("--write")
+            self.assertEqual(code, 0, err)
+        self.assertEqual(
+            [m["name"] for m in json.loads(Path(self.config).read_text())["machines"]], ["host1", "ci5", "ci6"]
+        )
+        self.assertEqual(len(json.loads(Path(self.config + ".bak").read_text())["machines"]), 2)
+
     def test_a_failed_write_leaves_the_file_and_no_temporary_file(self):
         before = Path(self.config).read_text()
         with mock.patch.object(discover.os, "replace", side_effect=OSError(28, "No space left on device")):

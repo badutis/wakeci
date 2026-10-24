@@ -30,6 +30,14 @@ if [ "$1" = -s ]; then echo "$*" >> /tmp/ethtool.calls; exit 0; fi
 printf 'Settings for %s:\n\tWake-on: g\n' "$1"
 FAKE
 sudo chmod 0755 /usr/sbin/ethtool
+# The GitHub runner runs this very script under its own Runner.Worker, so wakeci-sleep would
+# always see a job. This pgrep, first in sudo's secure_path, calls the real one with the
+# same arguments and leaves out only the runner's own processes (and itself).
+sudo tee /usr/local/sbin/pgrep >/dev/null <<'FAKE'
+#!/bin/sh
+/usr/bin/pgrep -a "$@" | awk -v self="$$" '$1 != self && $0 !~ /\/bin\/Runner\.Worker/ && $0 !~ /\/usr\/local\/sbin\/pgrep/' | grep -q .
+FAKE
+sudo chmod 0755 /usr/local/sbin/pgrep
 IFACE="$(ip route show default | awk '{print $5; exit}')"
 for u in "$USER_NAME" "$CI_USER"; do
   id "$u" >/dev/null 2>&1 || sudo useradd -m -s /bin/bash "$u"
@@ -117,7 +125,7 @@ probe -tt check  # restrict refuses the terminal; the check still runs
 [ "$CODE" = 10 ] || fail "with -tt: exit $CODE, $(cat "$W/err")"
 ok "client commands never run"
 
-# A running job is seen.
+# A running job is seen (the idle checks above show the runner's own worker is not).
 bash -c 'exec -a Runner.Worker sleep 60' &
 JOB=$!
 sleep 1

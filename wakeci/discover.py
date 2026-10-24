@@ -364,6 +364,9 @@ def _write(path: str, text: str) -> str:
         # Keeps the group the service reads it through, e.g. root:wakeci 0640.
         with contextlib.suppress(PermissionError):
             os.chown(tmp, st.st_uid, st.st_gid)
+        # A read-only backup from an earlier run could not be opened for writing.
+        if os.path.lexists(path + ".bak"):
+            os.unlink(path + ".bak")
         shutil.copy2(path, path + ".bak")
         os.replace(tmp, path)
         return path
