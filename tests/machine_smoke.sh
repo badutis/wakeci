@@ -10,7 +10,8 @@ set -euo pipefail
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 # A command that fails without its own message still says where.
-trap 'echo "FAIL: line $LINENO: $BASH_COMMAND" >&2' ERR
+# (Only while set -e is on: probe() turns it off to read exit codes such as 10.)
+trap 'case $- in *e*) echo "FAIL: line $LINENO: $BASH_COMMAND" >&2 ;; esac' ERR
 ok() { echo "ok: $*"; }
 mode_owner() { sudo stat -c '%a %U' "$1"; }
 
