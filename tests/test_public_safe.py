@@ -95,6 +95,13 @@ class EmailAndToolTest(unittest.TestCase):
         for ok in ("1+someone@users.noreply.github.com", "noreply@github.com", "ops@example.org"):
             self.assertEqual(found(ok), [], ok)
 
+    def test_dependabots_sign_off_passes_but_not_other_github_addresses(self):
+        # Dependabot signs its commits off with this address; CI refused every one of them.
+        self.assertEqual(found("Signed-off-by: dependabot[bot] <support@github.com>"), [])
+        gh = "@" + "github" + ".com"  # assembled, so the guard does not find these in this file
+        for bad in ("someone" + gh, "support" + gh + ".example" + ".net", "xsupport" + gh):
+            self.assertEqual(found(bad), [f"email address {bad}"], bad)
+
     def test_ai_attribution_is_refused_in_any_spelling(self):
         for text in (
             f"Co-Authored-By: {TOOL} <x@example.com>",

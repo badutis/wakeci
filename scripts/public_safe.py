@@ -19,8 +19,8 @@ ref about to be pushed, so a leak is stopped before it reaches GitHub.
 
 Allowed placeholders: the documentation address ranges (RFC 5737: 192.0.2.0/24,
 198.51.100.0/24, 203.0.113.0/24; RFC 3849: 2001:db8::/32), the documentation MAC range
-(RFC 7042: 00:00:5e:00:53:xx), ``example.com/.org/.net`` and GitHub ``noreply``
-addresses.
+(RFC 7042: 00:00:5e:00:53:xx), ``example.com/.org/.net``, GitHub ``noreply`` addresses
+and ``support@github.com`` (Dependabot's sign-off).
 
 Not caught: public addresses, MAC addresses written as 12 hex digits without separators
 (they cannot be told apart from hashes), UTF-16 files (read as binary), and names of real
@@ -80,7 +80,10 @@ MAC_DOTTED = re.compile(
 )
 MAC_ALLOWED = re.compile(r"^(00005e0053[0-9a-f]{2}|f{12}|0{11}[0-9a-f])$")
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-EMAIL_ALLOWED = re.compile(r"(@users\.noreply\.github\.com|^noreply@github\.com|@example\.(com|org|net))$", re.I)
+# support@github.com: Dependabot signs its commits off with it.
+EMAIL_ALLOWED = re.compile(
+    r"(@users\.noreply\.github\.com|^noreply@github\.com|^support@github\.com|@example\.(com|org|net))$", re.I
+)
 # No letter before the name, so it is caught inside snake_case and CamelCase words too.
 AI_TOOLS = ("clau" + "de", "anthro" + "pic", "chat" + "gpt", "open" + "ai", "co" + "pilot")
 AI = re.compile(r"(?<![A-Za-z])(" + "|".join(AI_TOOLS) + ")", re.I)
