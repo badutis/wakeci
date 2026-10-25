@@ -67,6 +67,13 @@ sudo -u wakeci python3 /opt/wakeci/controller/doctor.py /etc/wakeci/config.json 
 Then a week in `"dry_run": true`, and turn it on. Each step is explained in
 [Getting started](https://github.com/badutis/wakeci/blob/main/docs/getting-started.md).
 
+## Support
+
+WakeCI is free and stays free: MIT licensed, with no paid edition and no limits. If it
+saves you power or hardware, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/badutis). Bug reports, fixes and a star help
+just as much.
+
 ## Status
 
 Not yet deployed. Run it a week with `"dry_run": true` before turning that off.

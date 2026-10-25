@@ -44,4 +44,6 @@ flowchart LR
 - [Troubleshooting](troubleshooting.md): what each `wakeci doctor` finding means.
 
 WakeCI is open source under the MIT license, with no paid edition and no limits. The code,
-issues and releases are on [GitHub](https://github.com/badutis/wakeci).
+issues and releases are on [GitHub](https://github.com/badutis/wakeci). If it saves you
+power or hardware, you can support it through
+[GitHub Sponsors](https://github.com/sponsors/badutis).
