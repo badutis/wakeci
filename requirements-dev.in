@@ -1,5 +1,5 @@
 # Development tools, used by CI and contributors only (WakeCI itself has no dependencies).
 # Compile with: pip-compile --generate-hashes --allow-unsafe requirements-dev.in
-ruff==0.16.10
+ruff==0.17.0
 mypy==2.4.0
 coverage==7.16.2
